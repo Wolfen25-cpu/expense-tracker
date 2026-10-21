@@ -32,7 +32,7 @@
   <table border="1" cellpadding="6">
     <tr>
       <th>Fecha</th><th>Monto</th><th>Categoría</th>
-      <th>Descripción</th><th>Método</th>
+      <th>Descripción</th><th>Método</th><th>Acciones</th>
     </tr>
     {% for g in gastos %}
     <tr>
@@ -41,9 +41,16 @@
       <td>{{ g.categoria.nombre }}</td>
       <td>{{ g.descripcion or "" }}</td>
       <td>{{ g.metodo_pago or "" }}</td>
+      <td>
+        <a href="/gastos/{{ g.id }}/editar">Editar</a>
+        <form method="POST" action="/gastos/{{ g.id }}/eliminar" style="display:inline"
+              onsubmit="return confirm('¿Eliminar este gasto?')">
+          <button type="submit">Eliminar</button>
+        </form>
+      </td>
     </tr>
     {% else %}
-    <tr><td colspan="5">Todavía no has registrado gastos.</td></tr>
+    <tr><td colspan="6">Todavía no has registrado gastos.</td></tr>
     {% endfor %}
   </table>
 </body>

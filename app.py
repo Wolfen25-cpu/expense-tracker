@@ -85,6 +85,30 @@ def gastos():
                            total=total,
                            hoy=date.today().isoformat())
 
+@app.route("/gastos/<int:gasto_id>/editar", methods=["GET", "POST"])
+@login_required
+def editar_gasto(gasto_id):
+    gasto = Gasto.query.filter_by(id=gasto_id, usuario_id=current_user.id).first_or_404()
+    if request.method == "POST":
+        gasto.fecha = datetime.strptime(request.form["fecha"], "%Y-%m-%d").date()
+        gasto.monto = float(request.form["monto"])
+        gasto.descripcion = request.form.get("descripcion")
+        gasto.metodo_pago = request.form.get("metodo_pago")
+        gasto.categoria_id = int(request.form["categoria_id"])
+        db.session.commit()
+        return redirect(url_for("gastos"))
+
+    categorias = Categoria.query.filter_by(es_predefinida=True).all()
+    return render_template("editar_gasto.html", gasto=gasto, categorias=categorias)
+
+@app.route("/gastos/<int:gasto_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_gasto(gasto_id):
+    gasto = Gasto.query.filter_by(id=gasto_id, usuario_id=current_user.id).first_or_404()
+    db.session.delete(gasto)
+    db.session.commit()
+    return redirect(url_for("gastos"))
+
 with app.app_context():
     db.create_all()
     for nombre in CATEGORIAS_BASE:
