@@ -1,7 +1,8 @@
 from flask import Flask, render_template, request, redirect, url_for
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, Usuario, Categoria
+from datetime import date, datetime
+from models import db, Usuario, Categoria, Gasto
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///gastos.db"
@@ -16,7 +17,7 @@ def cargar_usuario(user_id):
     return db.session.get(Usuario, int(user_id))
 
 CATEGORIAS_BASE = ["Alimentación", "Transporte", "Vivienda", "Salud",
-                   "Entretenimiento", "Educación", "Otros"]
+                   "Entretenimiento", "Educación", "Mensualidades", "Otros"]
 
 @app.route("/registro", methods=["GET", "POST"])
 def registro():
@@ -54,18 +55,42 @@ def logout():
 @app.route("/")
 @login_required
 def inicio():
+    return redirect(url_for("gastos"))
+
+@app.route("/gastos", methods=["GET", "POST"])
+@login_required
+def gastos():
+    if request.method == "POST":
+        gasto = Gasto(
+            fecha=datetime.strptime(request.form["fecha"], "%Y-%m-%d").date(),
+            monto=float(request.form["monto"]),
+            descripcion=request.form.get("descripcion"),
+            metodo_pago=request.form.get("metodo_pago"),
+            categoria_id=int(request.form["categoria_id"]),
+            usuario_id=current_user.id
+        )
+        db.session.add(gasto)
+        db.session.commit()
+        return redirect(url_for("gastos"))
+
+    mis_gastos = (Gasto.query
+                  .filter_by(usuario_id=current_user.id)
+                  .order_by(Gasto.fecha.desc(), Gasto.id.desc())
+                  .all())
     categorias = Categoria.query.filter_by(es_predefinida=True).all()
-    lista = "".join(f"<li>{c.nombre}</li>" for c in categorias)
-    return (f"<h1>Hola, {current_user.nombre}</h1>"
-            f"<p>Categorías disponibles:</p><ul>{lista}</ul>"
-            f"<p><a href='/logout'>Cerrar sesión</a></p>")
+    total = sum(g.monto for g in mis_gastos)
+    return render_template("gastos.html",
+                           gastos=mis_gastos,
+                           categorias=categorias,
+                           total=total,
+                           hoy=date.today().isoformat())
 
 with app.app_context():
     db.create_all()
-    if not Categoria.query.filter_by(es_predefinida=True).first():
-        for nombre in CATEGORIAS_BASE:
+    for nombre in CATEGORIAS_BASE:
+        if not Categoria.query.filter_by(nombre=nombre, es_predefinida=True).first():
             db.session.add(Categoria(nombre=nombre, es_predefinida=True))
-        db.session.commit()
+    db.session.commit()
 
 if __name__ == "__main__":
     app.run(debug=True)

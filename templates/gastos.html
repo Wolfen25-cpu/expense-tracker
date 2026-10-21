@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Mis gastos</title></head>
+<body>
+  <p>Hola, {{ current_user.nombre }} | <a href="/logout">Cerrar sesión</a></p>
+
+  <h1>Registrar un gasto</h1>
+  <form method="POST" action="/gastos">
+    <p>Fecha: <input name="fecha" type="date" value="{{ hoy }}" required></p>
+    <p>Monto: <input name="monto" type="number" step="0.01" min="0" required></p>
+    <p>Categoría:
+      <select name="categoria_id" required>
+        {% for c in categorias %}
+          <option value="{{ c.id }}">{{ c.nombre }}</option>
+        {% endfor %}
+      </select>
+    </p>
+    <p>Descripción: <input name="descripcion" maxlength="200"></p>
+    <p>Método de pago:
+      <select name="metodo_pago">
+        <option>Efectivo</option>
+        <option>Tarjeta de débito</option>
+        <option>Tarjeta de crédito</option>
+        <option>Transferencia</option>
+        <option>Otro</option>
+      </select>
+    </p>
+    <button type="submit">Guardar gasto</button>
+  </form>
+
+  <h2>Mis gastos (total: ${{ "%.2f"|format(total) }})</h2>
+  <table border="1" cellpadding="6">
+    <tr>
+      <th>Fecha</th><th>Monto</th><th>Categoría</th>
+      <th>Descripción</th><th>Método</th>
+    </tr>
+    {% for g in gastos %}
+    <tr>
+      <td>{{ g.fecha.strftime("%d/%m/%Y") }}</td>
+      <td>${{ "%.2f"|format(g.monto) }}</td>
+      <td>{{ g.categoria.nombre }}</td>
+      <td>{{ g.descripcion or "" }}</td>
+      <td>{{ g.metodo_pago or "" }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">Todavía no has registrado gastos.</td></tr>
+    {% endfor %}
+  </table>
+</body>
+</html>
