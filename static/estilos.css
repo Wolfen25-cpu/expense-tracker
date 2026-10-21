@@ -1,0 +1,199 @@
+/* =====================================================================
+   HOJA DE ESTILOS del Rastreador de Gastos
+   Capa de presentacion segun la arquitectura en tres capas
+   (seccion 5.2.1 de la Tarea #2).
+   Responde a RNF01 (usabilidad): interfaz clara, legible y con
+   jerarquia visual que permite registrar un gasto en pocos segundos.
+   ===================================================================== */
+
+/* --- Variables de color: la paleta se define una sola vez --- */
+:root {
+  --fondo: #f4f6f8;
+  --superficie: #ffffff;
+  --texto: #1f2933;
+  --texto-suave: #6b7682;
+  --acento: #2f6f6b;
+  --acento-claro: #e3efee;
+  --borde: #dde3e8;
+  --peligro: #b3453c;
+}
+
+/* --- Reinicio basico: margenes uniformes en todos los navegadores --- */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--fondo);
+  color: var(--texto);
+  line-height: 1.5;
+}
+
+/* --- Barra de navegacion superior --- */
+.barra {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 24px;
+  background: var(--acento);
+  color: #fff;
+}
+.marca { font-weight: 600; font-size: 1.05rem; }
+.barra nav { display: flex; align-items: center; gap: 18px; }
+.barra a { color: #fff; text-decoration: none; }
+.barra a:hover { text-decoration: underline; }
+.usuario { opacity: .85; font-size: .9rem; }
+
+/* --- Contenedor central del contenido --- */
+.contenedor {
+  max-width: 980px;
+  margin: 28px auto;
+  padding: 0 20px;
+}
+
+h1 { font-size: 1.5rem; margin: 0 0 18px; }
+h2 { font-size: 1.2rem; margin: 32px 0 14px; }
+
+/* --- Tarjetas: agrupan visualmente formularios y tablas --- */
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 22px;
+  margin-bottom: 24px;
+}
+
+/* --- Formularios --- */
+/* Rejilla flexible: los campos se acomodan solos segun el ancho,
+   lo que da una interfaz utilizable tambien en celular (RNF01). */
+.campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+.campo { display: flex; flex-direction: column; }
+.campo label {
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  margin-bottom: 5px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+input, select {
+  padding: 9px 11px;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  font-size: .95rem;
+  font-family: inherit;
+  background: #fff;
+  color: var(--texto);
+}
+input:focus, select:focus {
+  outline: 2px solid var(--acento);
+  outline-offset: 1px;
+}
+
+/* --- Botones --- */
+button, .boton {
+  padding: 9px 18px;
+  border: none;
+  border-radius: 6px;
+  background: var(--acento);
+  color: #fff;
+  font-size: .95rem;
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+button:hover, .boton:hover { opacity: .9; }
+.boton-secundario {
+  background: transparent;
+  color: var(--texto-suave);
+  border: 1px solid var(--borde);
+}
+/* Boton de eliminar: color de advertencia y tamano reducido (RF03) */
+.boton-peligro {
+  background: transparent;
+  color: var(--peligro);
+  padding: 4px 8px;
+  font-size: .85rem;
+}
+.acciones { margin-top: 18px; display: flex; gap: 10px; align-items: center; }
+
+/* --- Resumen del total --- */
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  background: var(--acento-claro);
+  border-radius: 10px;
+  padding: 16px 22px;
+  margin-bottom: 22px;
+}
+.total .cifra { font-size: 1.6rem; font-weight: 700; color: var(--acento); }
+.total .etiqueta { color: var(--texto-suave); font-size: .9rem; }
+
+/* --- Tabla de gastos --- */
+.tabla-envoltura { overflow-x: auto; }   /* permite desplazar en pantallas chicas */
+table { width: 100%; border-collapse: collapse; background: var(--superficie); }
+th, td {
+  padding: 11px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--borde);
+  font-size: .93rem;
+}
+th {
+  background: #eef2f4;
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--texto-suave);
+}
+tbody tr:hover { background: #fafbfc; }
+.monto { font-variant-numeric: tabular-nums; font-weight: 600; }
+.vacio { text-align: center; color: var(--texto-suave); padding: 26px; }
+
+/* --- Etiqueta de categoria --- */
+.etiqueta-categoria {
+  background: var(--acento-claro);
+  color: var(--acento);
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: .82rem;
+}
+
+/* --- Pantallas de acceso (login y registro) --- */
+.acceso {
+  max-width: 380px;
+  margin: 70px auto;
+  padding: 0 20px;
+}
+.acceso .tarjeta { padding: 30px; }
+.acceso .campo { margin-bottom: 15px; }
+.acceso button { width: 100%; margin-top: 6px; }
+.acceso .enlace { text-align: center; margin-top: 16px; font-size: .9rem; }
+.acceso a { color: var(--acento); }
+.titulo-acceso { text-align: center; margin-bottom: 22px; }
+
+/* --- Mensajes de error --- */
+.error {
+  background: #fdecea;
+  color: var(--peligro);
+  border: 1px solid #f3c4c0;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: .9rem;
+}
+
+/* --- Pie de pagina --- */
+.pie {
+  text-align: center;
+  color: var(--texto-suave);
+  font-size: .82rem;
+  padding: 26px 20px;
+}

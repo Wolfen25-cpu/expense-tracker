@@ -1,14 +1,34 @@
-<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="UTF-8"><title>Crear cuenta</title></head>
-<body>
-  <h1>Crear cuenta</h1>
-  <form method="POST">
-    <p><input name="nombre" placeholder="Nombre" required></p>
-    <p><input name="correo" type="email" placeholder="Correo" required></p>
-    <p><input name="contrasena" type="password" placeholder="Contraseña" required></p>
-    <button type="submit">Registrarme</button>
-  </form>
-  <p>¿Ya tienes cuenta? <a href="/login">Inicia sesión</a></p>
-</body>
-</html>
+{% extends "base.html" %}
+<!--
+  PANTALLA DE CREACION DE CUENTA (RF01).
+  La contrasena viaja al servidor y alli se almacena hasheada (RNF03);
+  esta plantilla nunca la guarda ni la muestra.
+-->
+
+{% block titulo %}Crear cuenta{% endblock %}
+
+{% block contenido %}
+  <div class="acceso">
+    <h1 class="titulo-acceso">Crear cuenta</h1>
+    <div class="tarjeta">
+      <form method="POST">
+        <div class="campo">
+          <label for="nombre">Nombre</label>
+          <input id="nombre" name="nombre" required>
+        </div>
+        <div class="campo">
+          <label for="correo">Correo</label>
+          <input id="correo" name="correo" type="email" required>
+        </div>
+        <div class="campo">
+          <label for="contrasena">Contraseña</label>
+          <input id="contrasena" name="contrasena" type="password" minlength="6" required>
+        </div>
+        <button type="submit">Registrarme</button>
+      </form>
+      <p class="enlace">
+        ¿Ya tienes cuenta? <a href="{{ url_for('login') }}">Inicia sesión</a>
+      </p>
+    </div>
+  </div>
+{% endblock %}

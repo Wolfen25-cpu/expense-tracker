@@ -1,57 +1,103 @@
-<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="UTF-8"><title>Mis gastos</title></head>
-<body>
-  <p>Hola, {{ current_user.nombre }} | <a href="/logout">Cerrar sesión</a></p>
+{% extends "base.html" %}
+<!--
+  PANTALLA PRINCIPAL: registro y listado de gastos.
+  RF02: formulario de alta de gasto.
+  RF03: acciones de editar y eliminar en cada fila.
+  RF04: desplegable con las categorias disponibles.
+  Extiende base.html, por lo que solo define su contenido propio.
+-->
 
+{% block titulo %}Mis gastos{% endblock %}
+
+{% block contenido %}
+
+  <!-- RF02: alta de gasto. La fecha llega precargada con el dia de hoy
+       para reducir el tiempo de registro (RNF01). -->
   <h1>Registrar un gasto</h1>
-  <form method="POST" action="/gastos">
-    <p>Fecha: <input name="fecha" type="date" value="{{ hoy }}" required></p>
-    <p>Monto: <input name="monto" type="number" step="0.01" min="0" required></p>
-    <p>Categoría:
-      <select name="categoria_id" required>
-        {% for c in categorias %}
-          <option value="{{ c.id }}">{{ c.nombre }}</option>
-        {% endfor %}
-      </select>
-    </p>
-    <p>Descripción: <input name="descripcion" maxlength="200"></p>
-    <p>Método de pago:
-      <select name="metodo_pago">
-        <option>Efectivo</option>
-        <option>Tarjeta de débito</option>
-        <option>Tarjeta de crédito</option>
-        <option>Transferencia</option>
-        <option>Otro</option>
-      </select>
-    </p>
-    <button type="submit">Guardar gasto</button>
-  </form>
+  <div class="tarjeta">
+    <form method="POST" action="{{ url_for('gastos') }}">
+      <div class="campos">
+        <div class="campo">
+          <label for="fecha">Fecha</label>
+          <input id="fecha" name="fecha" type="date" value="{{ hoy }}" required>
+        </div>
+        <div class="campo">
+          <label for="monto">Monto</label>
+          <input id="monto" name="monto" type="number" step="0.01" min="0"
+                 placeholder="0.00" required>
+        </div>
+        <div class="campo">
+          <label for="categoria">Categoría</label>
+          <select id="categoria" name="categoria_id" required>
+            {% for c in categorias %}
+              <option value="{{ c.id }}">{{ c.nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="campo">
+          <label for="metodo">Método de pago</label>
+          <select id="metodo" name="metodo_pago">
+            <option>Efectivo</option>
+            <option>Tarjeta de débito</option>
+            <option>Tarjeta de crédito</option>
+            <option>Transferencia</option>
+            <option>Otro</option>
+          </select>
+        </div>
+        <div class="campo">
+          <label for="descripcion">Descripción</label>
+          <input id="descripcion" name="descripcion" maxlength="200"
+                 placeholder="Opcional">
+        </div>
+      </div>
+      <div class="acciones">
+        <button type="submit">Guardar gasto</button>
+      </div>
+    </form>
+  </div>
 
-  <h2>Mis gastos (total: ${{ "%.2f"|format(total) }})</h2>
-  <table border="1" cellpadding="6">
-    <tr>
-      <th>Fecha</th><th>Monto</th><th>Categoría</th>
-      <th>Descripción</th><th>Método</th><th>Acciones</th>
-    </tr>
-    {% for g in gastos %}
-    <tr>
-      <td>{{ g.fecha.strftime("%d/%m/%Y") }}</td>
-      <td>${{ "%.2f"|format(g.monto) }}</td>
-      <td>{{ g.categoria.nombre }}</td>
-      <td>{{ g.descripcion or "" }}</td>
-      <td>{{ g.metodo_pago or "" }}</td>
-      <td>
-        <a href="/gastos/{{ g.id }}/editar">Editar</a>
-        <form method="POST" action="/gastos/{{ g.id }}/eliminar" style="display:inline"
-              onsubmit="return confirm('¿Eliminar este gasto?')">
-          <button type="submit">Eliminar</button>
-        </form>
-      </td>
-    </tr>
-    {% else %}
-    <tr><td colspan="6">Todavía no has registrado gastos.</td></tr>
-    {% endfor %}
-  </table>
-</body>
-</html>
+  <!-- Resumen acumulado. En la Iteracion 3 se sustituye por los
+       reportes por periodo y la comparacion con el presupuesto (RF06). -->
+  <div class="total">
+    <span class="etiqueta">Total registrado ({{ gastos|length }} gastos)</span>
+    <span class="cifra">${{ "%.2f"|format(total) }}</span>
+  </div>
+
+  <!-- Listado de gastos del usuario, del mas reciente al mas antiguo -->
+  <h2>Historial</h2>
+  <div class="tarjeta">
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Monto</th><th>Categoría</th>
+            <th>Descripción</th><th>Método</th><th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for g in gastos %}
+          <tr>
+            <td>{{ g.fecha.strftime("%d/%m/%Y") }}</td>
+            <td class="monto">${{ "%.2f"|format(g.monto) }}</td>
+            <td><span class="etiqueta-categoria">{{ g.categoria.nombre }}</span></td>
+            <td>{{ g.descripcion or "—" }}</td>
+            <td>{{ g.metodo_pago or "—" }}</td>
+            <!-- RF03: el confirm evita eliminaciones accidentales (RNF01) -->
+            <td>
+              <a href="{{ url_for('editar_gasto', gasto_id=g.id) }}">Editar</a>
+              <form method="POST" action="{{ url_for('eliminar_gasto', gasto_id=g.id) }}"
+                    style="display:inline"
+                    onsubmit="return confirm('¿Eliminar este gasto?')">
+                <button type="submit" class="boton-peligro">Eliminar</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="vacio">Todavía no has registrado gastos.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+{% endblock %}

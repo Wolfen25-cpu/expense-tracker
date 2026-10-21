@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<!--
+  PLANTILLA BASE del sistema.
+  Define el esqueleto comun de todas las paginas: encabezado, barra de
+  navegacion, hoja de estilos y pie. Las demas plantillas la extienden
+  con {% extends "base.html" %} y solo rellenan el bloque "contenido".
+  Responde a RNF05 (mantenibilidad): el diseno se edita en un solo lugar.
+-->
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <!-- viewport: permite que la interfaz se adapte a pantallas de celular -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Rastreador de Gastos{% endblock %}</title>
+  <!-- url_for('static', ...) construye la ruta al CSS sin escribirla a mano -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
+</head>
+<body>
+
+  <!-- Barra superior: solo se muestra si hay un usuario conectado (RF01) -->
+  {% if current_user.is_authenticated %}
+  <header class="barra">
+    <span class="marca">Rastreador de Gastos</span>
+    <nav>
+      <a href="{{ url_for('gastos') }}">Mis gastos</a>
+      <span class="usuario">{{ current_user.nombre }}</span>
+      <a class="salir" href="{{ url_for('logout') }}">Cerrar sesión</a>
+    </nav>
+  </header>
+  {% endif %}
+
+  <!-- Hueco que cada pagina rellena con su propio contenido -->
+  <main class="contenedor">
+    {% block contenido %}{% endblock %}
+  </main>
+
+  <footer class="pie">
+    COMP 6970 &middot; Seminario Integrador &middot; UIPR Fajardo
+  </footer>
+
+</body>
+</html>

@@ -1,10 +1,19 @@
+"""
+Modelos de datos del Rastreador de Gastos.
+Corresponde al DER definido en la seccion 5.2.2 de la Tarea #2.
+Cada clase representa una tabla de la base de datos SQLite.
+"""
+
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from datetime import datetime
 
 db = SQLAlchemy()
 
+
 class Usuario(db.Model, UserMixin):
+    """Entidad Usuario. Soporta RF01 (cuentas) y RNF03 (la contrasena
+    se guarda hasheada, nunca en texto plano)."""
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(100), nullable=False)
     correo = db.Column(db.String(120), unique=True, nullable=False)
@@ -14,7 +23,11 @@ class Usuario(db.Model, UserMixin):
     gastos = db.relationship("Gasto", backref="usuario")
     categorias = db.relationship("Categoria", backref="usuario")
 
+
 class Categoria(db.Model):
+    """Entidad Categoria. Soporta RF04.
+    es_predefinida distingue las categorias base del sistema de las que
+    crea el propio usuario (usuario_id queda vacio en las predefinidas)."""
     id = db.Column(db.Integer, primary_key=True)
     nombre = db.Column(db.String(60), nullable=False)
     es_predefinida = db.Column(db.Boolean, default=False)
@@ -22,7 +35,11 @@ class Categoria(db.Model):
 
     gastos = db.relationship("Gasto", backref="categoria")
 
+
 class Gasto(db.Model):
+    """Entidad Gasto, nucleo del sistema. Soporta RF02 y RF03.
+    Es la fuente de datos de los reportes (RF06) y del analisis de
+    patrones para las recomendaciones (RF08)."""
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     monto = db.Column(db.Float, nullable=False)
@@ -31,7 +48,10 @@ class Gasto(db.Model):
     categoria_id = db.Column(db.Integer, db.ForeignKey("categoria.id"), nullable=False)
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=False)
 
+
 class Presupuesto(db.Model):
+    """Entidad Presupuesto mensual. Soporta RF05 y sirve de referencia
+    para las alertas de RF10."""
     id = db.Column(db.Integer, primary_key=True)
     mes = db.Column(db.Integer, nullable=False)
     anio = db.Column(db.Integer, nullable=False)
@@ -40,13 +60,19 @@ class Presupuesto(db.Model):
 
     detalles = db.relationship("PresupuestoCategoria", backref="presupuesto")
 
+
 class PresupuestoCategoria(db.Model):
+    """Detalle del presupuesto por categoria. Soporta RF05."""
     id = db.Column(db.Integer, primary_key=True)
     presupuesto_id = db.Column(db.Integer, db.ForeignKey("presupuesto.id"), nullable=False)
     categoria_id = db.Column(db.Integer, db.ForeignKey("categoria.id"), nullable=False)
     monto = db.Column(db.Float, nullable=False)
 
+
 class Recomendacion(db.Model):
+    """Historial de recomendaciones de ahorro. Soporta RF08.
+    El campo aplicada permite medir en la validacion si el usuario
+    cambia su conducta, segun la seccion 5.3.5 de la Tarea #2."""
     id = db.Column(db.Integer, primary_key=True)
     fecha = db.Column(db.DateTime, default=datetime.utcnow)
     texto = db.Column(db.Text, nullable=False)

@@ -1,13 +1,30 @@
-<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="UTF-8"><title>Iniciar sesión</title></head>
-<body>
-  <h1>Iniciar sesión</h1>
-  <form method="POST">
-    <p><input name="correo" type="email" placeholder="Correo" required></p>
-    <p><input name="contrasena" type="password" placeholder="Contraseña" required></p>
-    <button type="submit">Entrar</button>
-  </form>
-  <p>¿No tienes cuenta? <a href="/registro">Regístrate</a></p>
-</body>
-</html>
+{% extends "base.html" %}
+<!--
+  PANTALLA DE INICIO DE SESION (RF01).
+  Usa la clase .acceso, un contenedor estrecho y centrado pensado
+  para las pantallas de autenticacion.
+-->
+
+{% block titulo %}Iniciar sesión{% endblock %}
+
+{% block contenido %}
+  <div class="acceso">
+    <h1 class="titulo-acceso">Rastreador de Gastos</h1>
+    <div class="tarjeta">
+      <form method="POST">
+        <div class="campo">
+          <label for="correo">Correo</label>
+          <input id="correo" name="correo" type="email" required>
+        </div>
+        <div class="campo">
+          <label for="contrasena">Contraseña</label>
+          <input id="contrasena" name="contrasena" type="password" required>
+        </div>
+        <button type="submit">Entrar</button>
+      </form>
+      <p class="enlace">
+        ¿No tienes cuenta? <a href="{{ url_for('registro') }}">Regístrate</a>
+      </p>
+    </div>
+  </div>
+{% endblock %}
