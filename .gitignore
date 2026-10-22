@@ -1,0 +1,19 @@
+# Entorno virtual
+venv/
+
+# Archivos compilados de Python
+__pycache__/
+*.pyc
+
+# Base de datos local: cada instalacion crea la suya
+instance/
+
+# Cache de pruebas
+.pytest_cache/
+
+# Configuracion local y claves (nunca subir la clave de Groq)
+.env
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
