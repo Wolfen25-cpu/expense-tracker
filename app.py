@@ -8,20 +8,29 @@ SQLite mediante SQLAlchemy (capa de datos), segun la arquitectura en
 tres capas descrita en la seccion 5.2.1 de la Tarea #2.
 """
 
-from flask import Flask, render_template, request, redirect, url_for
+import os
+
+from flask import Flask, Response, render_template, request, redirect, url_for
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import date, datetime
 from models import db, Usuario, Categoria, Gasto
+import reportes
 
 # ---------------------------------------------------------------------
 # Configuracion de la aplicacion
 # RNF04 (portabilidad): SQLite es un solo archivo, sin servidor,
 # por lo que la aplicacion corre igual en Windows, macOS y Linux.
+# La base de datos y la clave secreta se pueden cambiar con variables de
+# entorno (GASTOS_DB y GASTOS_SECRET_KEY). Esto permite que las pruebas
+# automaticas usen una base de datos en memoria sin tocar los datos
+# reales (pruebas de software) y que la clave no quede escrita en el
+# codigo cuando se despliegue (RNF03). Sin variables se usan los valores
+# de desarrollo de siempre.
 # ---------------------------------------------------------------------
 app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///gastos.db"
-app.config["SECRET_KEY"] = "clave-temporal-de-desarrollo"  # TODO: mover a variable de entorno
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("GASTOS_DB", "sqlite:///gastos.db")
+app.config["SECRET_KEY"] = os.environ.get("GASTOS_SECRET_KEY", "clave-temporal-de-desarrollo")
 db.init_app(app)
 
 # Gestion de sesiones de usuario (RF01)
@@ -164,6 +173,70 @@ def eliminar_gasto(gasto_id):
     db.session.delete(gasto)
     db.session.commit()
     return redirect(url_for("gastos"))
+
+
+# =====================================================================
+# RF06, RF07 y RF09: Reportes, graficas y exportacion
+# Los calculos viven en reportes.py; aqui solo se coordinan.
+# =====================================================================
+
+def _parametros_reporte():
+    """Lee el periodo y la fecha de referencia de la URL. Si faltan o
+    son invalidos se usan valores seguros (mensual y hoy), de modo que
+    una URL manipulada nunca produce un error (RNF01)."""
+    periodo = request.args.get("periodo", "mensual")
+    if periodo not in reportes.PERIODOS:
+        periodo = "mensual"
+    try:
+        referencia = datetime.strptime(request.args.get("fecha", ""), "%Y-%m-%d").date()
+    except ValueError:
+        referencia = date.today()
+    return periodo, referencia
+
+
+def _reporte_del_usuario(periodo, referencia):
+    """Lee de la base de datos solo los gastos del usuario conectado
+    dentro del rango necesario y calcula el reporte.
+    RNF03: el filtro por usuario_id aisla los datos de cada usuario."""
+    desde, hasta = reportes.rango_consulta(periodo, referencia)
+    gastos_usuario = (Gasto.query
+                      .filter(Gasto.usuario_id == current_user.id,
+                              Gasto.fecha >= desde,
+                              Gasto.fecha <= hasta)
+                      .all())
+    return reportes.calcular_reporte(gastos_usuario, periodo, referencia)
+
+
+@app.route("/reportes")
+@login_required
+def reporte():
+    """RF06 y RF07: muestra el resumen del periodo elegido, los totales
+    por categoria y las dos graficas."""
+    periodo, referencia = _parametros_reporte()
+    datos = _reporte_del_usuario(periodo, referencia)
+    return render_template(
+        "reportes.html",
+        r=datos,
+        periodos=reportes.PERIODOS,
+        referencia=referencia.isoformat(),
+        anterior=reportes.desplazar(periodo, referencia, -1).isoformat(),
+        siguiente=reportes.desplazar(periodo, referencia, 1).isoformat(),
+        grafica_distribucion=reportes.grafica_distribucion(datos["categorias"]),
+        grafica_evolucion=reportes.grafica_evolucion(datos["evolucion"]),
+    )
+
+
+@app.route("/reportes/exportar.csv")
+@login_required
+def exportar_reporte():
+    """RF09: descarga los gastos del periodo en CSV. Se codifica con
+    utf-8-sig para que Excel muestre bien las tildes."""
+    periodo, referencia = _parametros_reporte()
+    datos = _reporte_del_usuario(periodo, referencia)
+    contenido = reportes.exportar_csv(datos["df"]).encode("utf-8-sig")
+    nombre = f"gastos_{periodo}_{datos['inicio'].isoformat()}.csv"
+    return Response(contenido, mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename={nombre}"})
 
 
 # ---------------------------------------------------------------------

@@ -197,3 +197,71 @@ tbody tr:hover { background: #fafbfc; }
   font-size: .82rem;
   padding: 26px 20px;
 }
+
+/* =====================================================================
+   REPORTES (RF06, RF07, RF09)
+   Estilos de la pantalla de reportes: filtros, indicadores, barras de
+   proporcion y graficas. Reutilizan las variables de color de :root.
+   ===================================================================== */
+
+/* --- Selector de periodo y fecha --- */
+.filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+}
+.filtros .campo { min-width: 190px; }
+
+/* --- Encabezado del periodo con botones Anterior y Siguiente --- */
+.encabezado-periodo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.encabezado-periodo h2 { margin: 0; text-align: center; }
+
+/* --- Indicadores generales: rejilla que se adapta al ancho --- */
+.resumen {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.indicador {
+  display: flex;
+  flex-direction: column;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+.indicador .etiqueta { color: var(--texto-suave); font-size: .82rem; }
+.indicador .cifra { font-size: 1.35rem; font-weight: 700; }
+.indicador.destacado { background: var(--acento-claro); border-color: transparent; }
+.indicador.destacado .cifra { color: var(--acento); }
+
+/* --- Barra de proporcion por categoria --- */
+.barra-pct {
+  display: inline-block;
+  vertical-align: middle;
+  width: 140px;
+  height: 8px;
+  background: #eef2f4;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-right: 8px;
+}
+.barra-pct .relleno { height: 100%; background: var(--acento); }
+.pct { font-size: .85rem; color: var(--texto-suave); }
+
+/* --- Graficas: dos columnas en pantalla ancha, una en celular --- */
+.graficas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+.graficas h3 { margin: 0 0 12px; font-size: 1rem; }
+.graficas img { max-width: 100%; height: auto; display: block; margin: 0 auto; }

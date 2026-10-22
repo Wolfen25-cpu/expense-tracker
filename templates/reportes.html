@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+<!--
+  PANTALLA DE REPORTES.
+  RF06: resumen y totales por categoria para el periodo elegido
+        (diario, semanal, mensual o anual).
+  RF07: grafica de distribucion por categoria y de evolucion en el tiempo.
+  RF09: boton para exportar el periodo en CSV.
+  Los calculos los hace reportes.py; esta plantilla solo los presenta.
+  La comparacion contra el presupuesto se agrega con RF05.
+-->
+
+{% block titulo %}Reportes{% endblock %}
+
+{% block contenido %}
+
+  <h1>Reportes de gastos</h1>
+
+  <!-- Selector de periodo y fecha. Es un formulario GET, asi la direccion
+       de la pagina conserva la eleccion y se puede recargar o compartir. -->
+  <div class="tarjeta">
+    <form method="GET" action="{{ url_for('reporte') }}" class="filtros">
+      <div class="campo">
+        <label for="periodo">Periodo</label>
+        <select id="periodo" name="periodo">
+          {% for clave, nombre in periodos.items() %}
+            <option value="{{ clave }}" {% if clave == r.periodo %}selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="campo">
+        <label for="fecha">Fecha de referencia</label>
+        <input id="fecha" name="fecha" type="date" value="{{ referencia }}" required>
+      </div>
+      <button type="submit">Ver reporte</button>
+    </form>
+  </div>
+
+  <!-- Encabezado del periodo con navegacion al periodo anterior y siguiente -->
+  <div class="encabezado-periodo">
+    <a class="boton boton-secundario"
+       href="{{ url_for('reporte', periodo=r.periodo, fecha=anterior) }}">&larr; Anterior</a>
+    <h2>{{ r.etiqueta }}</h2>
+    <a class="boton boton-secundario"
+       href="{{ url_for('reporte', periodo=r.periodo, fecha=siguiente) }}">Siguiente &rarr;</a>
+  </div>
+
+  <!-- Indicadores generales del periodo -->
+  <div class="resumen">
+    <div class="indicador destacado">
+      <span class="etiqueta">Total gastado</span>
+      <span class="cifra">${{ "%.2f"|format(r.resumen.total) }}</span>
+    </div>
+    <div class="indicador">
+      <span class="etiqueta">Cantidad de gastos</span>
+      <span class="cifra">{{ r.resumen.cantidad }}</span>
+    </div>
+    <div class="indicador">
+      <span class="etiqueta">Promedio por gasto</span>
+      <span class="cifra">${{ "%.2f"|format(r.resumen.promedio) }}</span>
+    </div>
+    <div class="indicador">
+      <span class="etiqueta">Gasto mayor</span>
+      <span class="cifra">${{ "%.2f"|format(r.resumen.mayor) }}</span>
+    </div>
+  </div>
+
+  {% if r.resumen.cantidad == 0 %}
+    <!-- Estado vacio: si el periodo no tiene gastos se explica en lugar
+         de mostrar tablas y graficas en blanco -->
+    <div class="tarjeta vacio">
+      No hay gastos registrados en este periodo.
+      <a href="{{ url_for('gastos') }}">Registrar un gasto</a>
+    </div>
+  {% else %}
+
+    <!-- RF06: totales por categoria con barra de proporcion -->
+    <h2>Totales por categoría</h2>
+    <div class="tarjeta">
+      <div class="tabla-envoltura">
+        <table>
+          <thead>
+            <tr><th>Categoría</th><th>Total</th><th>Proporción</th></tr>
+          </thead>
+          <tbody>
+          {% for c in r.categorias %}
+            <tr>
+              <td><span class="etiqueta-categoria">{{ c.categoria }}</span></td>
+              <td class="monto">${{ "%.2f"|format(c.total) }}</td>
+              <td>
+                <div class="barra-pct">
+                  <div class="relleno" style="width: {{ c.porcentaje }}%"></div>
+                </div>
+                <span class="pct">{{ c.porcentaje }}%</span>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- RF07: graficas generadas por matplotlib e incrustadas como imagen -->
+    <h2>Gráficas</h2>
+    <div class="graficas">
+      {% if grafica_distribucion %}
+      <div class="tarjeta">
+        <h3>Distribución por categoría</h3>
+        <img src="data:image/png;base64,{{ grafica_distribucion }}"
+             alt="Distribución del gasto por categoría">
+      </div>
+      {% endif %}
+      {% if grafica_evolucion %}
+      <div class="tarjeta">
+        <h3>Evolución en el tiempo</h3>
+        <img src="data:image/png;base64,{{ grafica_evolucion }}"
+             alt="Evolución del gasto en el tiempo">
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- RF09: exportacion del periodo mostrado -->
+    <div class="acciones">
+      <a class="boton"
+         href="{{ url_for('exportar_reporte', periodo=r.periodo, fecha=referencia) }}">
+        Exportar CSV
+      </a>
+    </div>
+
+  {% endif %}
+
+{% endblock %}
