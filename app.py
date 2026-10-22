@@ -13,8 +13,10 @@ import os
 from flask import Flask, Response, render_template, request, redirect, url_for
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import date, datetime
-from models import db, Usuario, Categoria, Gasto
+from datetime import date, datetime, timedelta
+from models import (db, Usuario, Categoria, Gasto,
+                    Presupuesto, PresupuestoCategoria)
+import presupuesto
 import reportes
 
 # ---------------------------------------------------------------------
@@ -133,11 +135,16 @@ def gastos():
                   .all())
     categorias = Categoria.query.filter_by(es_predefinida=True).all()
     total = sum(g.monto for g in mis_gastos)
+    # RF10: los avisos del mes en curso se muestran en la misma pantalla
+    # donde el usuario registra, que es donde puede reaccionar a tiempo.
+    hoy = date.today()
+    avisos = presupuesto.alertas(_comparacion_del_mes(hoy.month, hoy.year))
     return render_template("gastos.html",
                            gastos=mis_gastos,
                            categorias=categorias,
                            total=total,
-                           hoy=date.today().isoformat())
+                           avisos=avisos,
+                           hoy=hoy.isoformat())
 
 
 # =====================================================================
@@ -173,6 +180,126 @@ def eliminar_gasto(gasto_id):
     db.session.delete(gasto)
     db.session.commit()
     return redirect(url_for("gastos"))
+
+
+# =====================================================================
+# RF05 y RF10: Presupuesto mensual y avisos
+# Los calculos viven en presupuesto.py; aqui solo se leen y guardan
+# los datos y se coordina la pantalla.
+# =====================================================================
+
+def _monto(texto):
+    """Convierte el texto de un campo del formulario en un monto valido.
+    Un campo vacio o con texto invalido vale cero, que es la forma de
+    indicar que esa categoria no tiene presupuesto asignado."""
+    try:
+        valor = float(texto)
+    except (TypeError, ValueError):
+        return 0.0
+    return valor if valor > 0 else 0.0
+
+
+def _mes_anio(origen):
+    """Lee el mes y el anio de la peticion (de la URL o del formulario).
+    Ante cualquier valor invalido se usa el mes en curso, de modo que una
+    direccion manipulada nunca produce un error (RNF01)."""
+    hoy = date.today()
+    try:
+        mes = int(origen.get("mes", hoy.month))
+        anio = int(origen.get("anio", hoy.year))
+    except (TypeError, ValueError):
+        return hoy.month, hoy.year
+    if not 1 <= mes <= 12 or not 2000 <= anio <= 2100:
+        return hoy.month, hoy.year
+    return mes, anio
+
+
+def _presupuesto_del_mes(mes, anio, crear=False):
+    """Presupuesto del usuario conectado para ese mes, o None si todavia
+    no lo definio. Con crear=True lo crea vacio en lugar de devolver None.
+    RNF03: el filtro por usuario_id aisla los datos de cada usuario."""
+    registro = Presupuesto.query.filter_by(
+        usuario_id=current_user.id, mes=mes, anio=anio).first()
+    if registro is None and crear:
+        registro = Presupuesto(mes=mes, anio=anio, monto_total=0.0,
+                               usuario_id=current_user.id)
+        db.session.add(registro)
+    return registro
+
+
+def _rango_del_mes(mes, anio):
+    """Primer y ultimo dia del mes, ambos inclusivos."""
+    inicio = date(anio, mes, 1)
+    siguiente = (inicio + timedelta(days=32)).replace(day=1)
+    return inicio, siguiente - timedelta(days=1)
+
+
+def _comparacion_del_mes(mes, anio):
+    """RF05: compara el presupuesto definido con el gasto real del mes."""
+    inicio, fin = _rango_del_mes(mes, anio)
+    gastos_mes = (Gasto.query
+                  .filter(Gasto.usuario_id == current_user.id,
+                          Gasto.fecha >= inicio,
+                          Gasto.fecha <= fin)
+                  .all())
+    registro = _presupuesto_del_mes(mes, anio)
+    asignaciones = ({d.categoria.nombre: d.monto for d in registro.detalles}
+                    if registro else {})
+    return presupuesto.comparar(
+        registro.monto_total if registro else 0.0,
+        asignaciones,
+        presupuesto.gasto_por_categoria(gastos_mes),
+    )
+
+
+@app.route("/presupuesto", methods=["GET", "POST"])
+@login_required
+def presupuesto_mensual():
+    """RF05: define el presupuesto mensual total y por categoria, y
+    muestra cuanto se lleva consumido de cada uno.
+    RF10: lista los avisos de las categorias que pasaron el umbral."""
+    if request.method == "POST":
+        mes, anio = _mes_anio(request.form)
+        registro = _presupuesto_del_mes(mes, anio, crear=True)
+        registro.monto_total = _monto(request.form.get("monto_total"))
+
+        # Se recorren todas las categorias: las que traen monto se crean
+        # o se actualizan, y las que quedaron en blanco se eliminan del
+        # detalle para no dejar presupuestos en cero.
+        existentes = {d.categoria_id: d for d in registro.detalles}
+        for categoria in Categoria.query.filter_by(es_predefinida=True).all():
+            monto = _monto(request.form.get(f"categoria_{categoria.id}"))
+            detalle = existentes.get(categoria.id)
+            if monto > 0 and detalle is not None:
+                detalle.monto = monto
+            elif monto > 0:
+                db.session.add(PresupuestoCategoria(
+                    presupuesto=registro, categoria_id=categoria.id, monto=monto))
+            elif detalle is not None:
+                db.session.delete(detalle)
+        db.session.commit()
+        return redirect(url_for("presupuesto_mensual", mes=mes, anio=anio))
+
+    mes, anio = _mes_anio(request.args)
+    registro = _presupuesto_del_mes(mes, anio)
+    comparacion = _comparacion_del_mes(mes, anio)
+    mes_anterior, anio_anterior = presupuesto.mes_desplazado(mes, anio, -1)
+    mes_siguiente, anio_siguiente = presupuesto.mes_desplazado(mes, anio, 1)
+    return render_template(
+        "presupuesto.html",
+        c=comparacion,
+        avisos=presupuesto.alertas(comparacion),
+        categorias=Categoria.query.filter_by(es_predefinida=True).all(),
+        # Montos ya guardados, por id de categoria, para precargar el formulario
+        asignado={d.categoria_id: d.monto for d in registro.detalles} if registro else {},
+        monto_total=registro.monto_total if registro else 0.0,
+        mes=mes,
+        anio=anio,
+        etiqueta=presupuesto.etiqueta_mes(mes, anio),
+        umbral=presupuesto.UMBRAL_AVISO,
+        anterior={"mes": mes_anterior, "anio": anio_anterior},
+        siguiente={"mes": mes_siguiente, "anio": anio_siguiente},
+    )
 
 
 # =====================================================================

@@ -11,6 +11,21 @@
 
 {% block contenido %}
 
+  <!-- RF10: avisos del presupuesto del mes en curso. Se muestran aqui,
+       donde el usuario registra sus gastos, para que pueda reaccionar
+       antes de seguir gastando. La lista llega vacia si no hay
+       presupuesto definido o si todo va dentro de lo previsto. -->
+  {% if avisos %}
+  <div class="avisos">
+    {% for a in avisos %}
+      <div class="aviso {{ a.nivel }}">
+        {{ a.texto }}
+        <a href="{{ url_for('presupuesto_mensual') }}">Ver presupuesto</a>
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <!-- RF02: alta de gasto. La fecha llega precargada con el dia de hoy
        para reducir el tiempo de registro (RNF01). -->
   <h1>Registrar un gasto</h1>

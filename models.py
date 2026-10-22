@@ -62,11 +62,16 @@ class Presupuesto(db.Model):
 
 
 class PresupuestoCategoria(db.Model):
-    """Detalle del presupuesto por categoria. Soporta RF05."""
+    """Detalle del presupuesto por categoria. Soporta RF05.
+    La relacion con Categoria permite leer el nombre de la categoria
+    directamente desde el detalle (detalle.categoria.nombre) al comparar
+    el presupuesto con el gasto real."""
     id = db.Column(db.Integer, primary_key=True)
     presupuesto_id = db.Column(db.Integer, db.ForeignKey("presupuesto.id"), nullable=False)
     categoria_id = db.Column(db.Integer, db.ForeignKey("categoria.id"), nullable=False)
     monto = db.Column(db.Float, nullable=False)
+
+    categoria = db.relationship("Categoria")
 
 
 class Recomendacion(db.Model):

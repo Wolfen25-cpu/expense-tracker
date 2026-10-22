@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+<!--
+  PANTALLA DE PRESUPUESTO.
+  RF05: formulario para definir el presupuesto mensual total y el monto
+        asignado a cada categoria, mas la comparacion contra el gasto
+        real del mes.
+  RF10: franja de avisos de las categorias que pasaron el umbral.
+  Los calculos los hace presupuesto.py; esta plantilla solo los presenta.
+-->
+
+{% block titulo %}Presupuesto{% endblock %}
+
+{% block contenido %}
+
+  <h1>Presupuesto mensual</h1>
+
+  <!-- Navegacion entre meses. Son enlaces y no un formulario para que
+       cada mes tenga su propia direccion y se pueda recargar. -->
+  <div class="encabezado-periodo">
+    <a class="boton boton-secundario"
+       href="{{ url_for('presupuesto_mensual', mes=anterior.mes, anio=anterior.anio) }}">&larr; Anterior</a>
+    <h2>{{ etiqueta }}</h2>
+    <a class="boton boton-secundario"
+       href="{{ url_for('presupuesto_mensual', mes=siguiente.mes, anio=siguiente.anio) }}">Siguiente &rarr;</a>
+  </div>
+
+  <!-- RF10: avisos del mes mostrado -->
+  {% if avisos %}
+  <div class="avisos">
+    {% for a in avisos %}
+      <div class="aviso {{ a.nivel }}">{{ a.texto }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if c.definido %}
+  <!-- Consumo del presupuesto total del mes -->
+  <div class="tarjeta">
+    <div class="total">
+      <span class="etiqueta">
+        Gastado de ${{ "%.2f"|format(c.total.asignado) }} presupuestados
+      </span>
+      <span class="cifra">${{ "%.2f"|format(c.total.gastado) }}</span>
+    </div>
+    <div class="barra-pct grande">
+      <div class="relleno {{ c.total.estado }}" style="width: {{ c.total.ancho }}%"></div>
+    </div>
+    <p class="pct">
+      {{ c.total.porcentaje }}% consumido &middot;
+      {% if c.total.restante >= 0 %}
+        quedan ${{ "%.2f"|format(c.total.restante) }}
+      {% else %}
+        excedido por ${{ "%.2f"|format(c.total.restante|abs) }}
+      {% endif %}
+    </p>
+  </div>
+
+  <!-- RF05: detalle por categoria -->
+  <h2>Detalle por categoría</h2>
+  <div class="tarjeta">
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr>
+            <th>Categoría</th><th>Presupuestado</th><th>Gastado</th>
+            <th>Restante</th><th>Consumo</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for l in c.categorias %}
+          <tr>
+            <td><span class="etiqueta-categoria">{{ l.categoria }}</span></td>
+            <td class="monto">
+              {% if l.asignado %}${{ "%.2f"|format(l.asignado) }}{% else %}—{% endif %}
+            </td>
+            <td class="monto">${{ "%.2f"|format(l.gastado) }}</td>
+            <td class="monto {% if l.asignado and l.restante < 0 %}negativo{% endif %}">
+              {% if l.asignado %}${{ "%.2f"|format(l.restante) }}{% else %}—{% endif %}
+            </td>
+            <td>
+              {% if l.asignado %}
+                <div class="barra-pct">
+                  <div class="relleno {{ l.estado }}" style="width: {{ l.ancho }}%"></div>
+                </div>
+                <span class="pct">{{ l.porcentaje }}%</span>
+              {% else %}
+                <!-- Categoria con gasto pero sin presupuesto asignado -->
+                <span class="pct">Sin presupuesto</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <!-- Estado vacio: todavia no hay presupuesto para este mes -->
+  <div class="tarjeta vacio">
+    Todavía no has definido un presupuesto para {{ etiqueta }}.
+    Complétalo abajo para empezar a comparar tus gastos.
+  </div>
+  {% endif %}
+
+  <!-- RF05: definicion del presupuesto. Es un formulario POST porque
+       guarda datos; el mes y el anio viajan ocultos para que se guarde
+       en el mes que se esta viendo. -->
+  <h2>Definir el presupuesto de {{ etiqueta }}</h2>
+  <div class="tarjeta">
+    <form method="POST" action="{{ url_for('presupuesto_mensual') }}">
+      <input type="hidden" name="mes" value="{{ mes }}">
+      <input type="hidden" name="anio" value="{{ anio }}">
+
+      <div class="campo campo-total">
+        <label for="monto_total">Presupuesto total del mes</label>
+        <input id="monto_total" name="monto_total" type="number" step="0.01" min="0"
+               value="{% if monto_total %}{{ '%.2f'|format(monto_total) }}{% endif %}"
+               placeholder="0.00">
+      </div>
+
+      <p class="ayuda">
+        Asigna un monto a las categorías que quieras vigilar. Las que dejes
+        en blanco no se controlan. Recibirás un aviso al llegar al
+        {{ umbral }}% de lo presupuestado.
+      </p>
+
+      <div class="campos">
+        {% for cat in categorias %}
+        <div class="campo">
+          <label for="cat{{ cat.id }}">{{ cat.nombre }}</label>
+          <input id="cat{{ cat.id }}" name="categoria_{{ cat.id }}"
+                 type="number" step="0.01" min="0" placeholder="0.00"
+                 value="{% if asignado.get(cat.id) %}{{ '%.2f'|format(asignado[cat.id]) }}{% endif %}">
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if c.sobreasignado %}
+      <!-- Aviso de coherencia: la suma por categorias pasa del total -->
+      <p class="error">
+        La suma asignada por categorías (${{ "%.2f"|format(c.asignado_categorias) }})
+        supera el presupuesto total del mes.
+      </p>
+      {% elif c.definido %}
+      <p class="ayuda">
+        Sin asignar: ${{ "%.2f"|format(c.sin_asignar) }}
+      </p>
+      {% endif %}
+
+      <div class="acciones">
+        <button type="submit">Guardar presupuesto</button>
+        <a class="boton boton-secundario" href="{{ url_for('reporte') }}">Ver reportes</a>
+      </div>
+    </form>
+  </div>
+
+{% endblock %}

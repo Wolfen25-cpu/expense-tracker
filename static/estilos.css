@@ -265,3 +265,48 @@ tbody tr:hover { background: #fafbfc; }
 }
 .graficas h3 { margin: 0 0 12px; font-size: 1rem; }
 .graficas img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+
+/* =====================================================================
+   PRESUPUESTO Y AVISOS (RF05, RF10)
+   Estados de color: normal usa el acento, aviso usa ambar y excedido
+   usa el color de peligro. El estado nunca se comunica solo con color:
+   cada barra va acompanada del porcentaje y, cuando corresponde, de un
+   mensaje de texto (RNF01, accesibilidad).
+   ===================================================================== */
+
+/* --- Franja de avisos --- */
+.avisos { margin-bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
+.aviso {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: .92rem;
+  border: 1px solid transparent;
+}
+.aviso a { color: inherit; font-weight: 600; white-space: nowrap; }
+.aviso.aviso { background: #fdf4e3; }           /* nivel de advertencia */
+.aviso.excedido {
+  background: #fdecea;
+  color: var(--peligro);
+  border-color: #f3c4c0;
+}
+.aviso.aviso { color: #8a5b14; border-color: #f0dcb4; }
+
+/* --- Barras de consumo del presupuesto --- */
+.barra-pct.grande { height: 14px; border-radius: 7px; margin: 6px 0 4px; }
+.barra-pct .relleno.normal { background: var(--acento); }
+.barra-pct .relleno.aviso { background: #d98b3a; }
+.barra-pct .relleno.excedido { background: var(--peligro); }
+
+/* --- Montos y ayudas del formulario --- */
+.monto.negativo { color: var(--peligro); }
+.campo-total { max-width: 260px; margin-bottom: 6px; }
+.ayuda {
+  color: var(--texto-suave);
+  font-size: .88rem;
+  margin: 10px 0 16px;
+}
