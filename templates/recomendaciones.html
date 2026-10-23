@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+<!--
+  PANTALLA DE RECOMENDACIONES DE AHORRO (RF08).
+  Muestra el resumen agregado del mes, el boton que genera un conjunto
+  nuevo de recomendaciones y el historial guardado.
+  Cada recomendacion indica si la genero el modelo de IA o el nivel de
+  reglas, lo que permite comparar ambos niveles durante la validacion.
+-->
+
+{% block titulo %}Recomendaciones{% endblock %}
+
+{% block contenido %}
+
+  <h1>Recomendaciones de ahorro</h1>
+
+  <!-- Aviso del resultado de la ultima generacion. Si hubo que usar el
+       nivel de reglas se explica por que, en lugar de fallar en silencio. -->
+  {% if origen == "ia" %}
+    <div class="avisos">
+      <div class="aviso ok">Recomendaciones generadas con el modelo de inteligencia artificial.</div>
+    </div>
+  {% elif origen == "reglas" %}
+    <div class="avisos">
+      <div class="aviso aviso">
+        Se usaron las reglas del sistema{% if error %}: {{ error }}{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not hay_clave %}
+    <div class="avisos">
+      <div class="aviso aviso">
+        No hay clave de inteligencia artificial configurada. El sistema
+        funciona con el nivel de reglas, que no necesita internet.
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Resumen que se envia al analizador. Se muestra para que el usuario
+       sepa exactamente sobre que datos se le esta aconsejando y, segun
+       RNF06, compruebe que no salen descripciones ni datos personales. -->
+  <h2>Resumen de {{ etiqueta }}</h2>
+  <div class="tarjeta">
+    <div class="resumen">
+      <div class="indicador destacado">
+        <span class="etiqueta">Gastado este mes</span>
+        <span class="cifra">${{ "%.2f"|format(resumen.total) }}</span>
+      </div>
+      <div class="indicador">
+        <span class="etiqueta">Mes anterior</span>
+        <span class="cifra">${{ "%.2f"|format(resumen.total_anterior) }}</span>
+      </div>
+      <div class="indicador">
+        <span class="etiqueta">Categorías con gasto</span>
+        <span class="cifra">{{ resumen.cantidad_categorias }}</span>
+      </div>
+      <div class="indicador">
+        <span class="etiqueta">Gastos recurrentes</span>
+        <span class="cifra">{{ resumen.recurrentes|length }}</span>
+      </div>
+    </div>
+
+    <form method="POST" action="{{ url_for('generar_recomendaciones') }}">
+      <input type="hidden" name="mes" value="{{ mes }}">
+      <input type="hidden" name="anio" value="{{ anio }}">
+      <div class="acciones">
+        <button type="submit">Generar recomendaciones</button>
+        <a class="boton boton-secundario" href="{{ url_for('presupuesto_mensual') }}">Ver presupuesto</a>
+      </div>
+    </form>
+  </div>
+
+  <!-- Historial. El boton Aplicada registra si el usuario puso en
+       practica el consejo, dato con el que se mide el cambio de conducta
+       en la validacion del proyecto. -->
+  <h2>Historial</h2>
+  {% if historial %}
+    <div class="lista-recomendaciones">
+      {% for r in historial %}
+        <div class="tarjeta recomendacion {% if r.aplicada %}aplicada{% endif %}">
+          <div class="cabecera-recomendacion">
+            <span class="origen {{ r.origen }}">
+              {% if r.origen == "ia" %}Inteligencia artificial{% else %}Reglas del sistema{% endif %}
+            </span>
+            <span class="fecha">{{ r.fecha|fecha_local }}</span>
+          </div>
+          <p class="texto-recomendacion">{{ r.texto }}</p>
+          <div class="pie-recomendacion">
+            {% if r.ahorro_estimado %}
+              <span class="ahorro">Ahorro estimado: ${{ "%.2f"|format(r.ahorro_estimado) }}</span>
+            {% else %}
+              <span class="ahorro">Sin ahorro estimado</span>
+            {% endif %}
+            <form method="POST" action="{{ url_for('aplicar_recomendacion', recomendacion_id=r.id) }}">
+              <button type="submit" class="boton-secundario">
+                {% if r.aplicada %}Marcada como aplicada{% else %}Marcar como aplicada{% endif %}
+              </button>
+            </form>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="tarjeta vacio">
+      Todavía no has generado recomendaciones. Usa el botón de arriba.
+    </div>
+  {% endif %}
+
+{% endblock %}

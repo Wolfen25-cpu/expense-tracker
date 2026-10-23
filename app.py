@@ -10,14 +10,21 @@ tres capas descrita en la seccion 5.2.1 de la Tarea #2.
 
 import os
 
+from dotenv import load_dotenv
 from flask import Flask, Response, render_template, request, redirect, url_for
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from models import (db, Usuario, Categoria, Gasto,
-                    Presupuesto, PresupuestoCategoria)
+                    Presupuesto, PresupuestoCategoria, Recomendacion)
 import presupuesto
+import recomendaciones
 import reportes
+
+# Lee el archivo .env y deja sus valores como variables de entorno.
+# Ahi vive la clave del servicio de IA, que nunca se escribe en el codigo
+# ni se sube al repositorio (RNF03).
+load_dotenv()
 
 # ---------------------------------------------------------------------
 # Configuracion de la aplicacion
@@ -38,6 +45,27 @@ db.init_app(app)
 # Gestion de sesiones de usuario (RF01)
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
+
+
+# Zona horaria en la que se muestran las fechas. Se guarda todo en UTC y
+# se convierte solo al presentarlo, para que el sistema siga mostrando la
+# hora correcta aunque se despliegue en un servidor de otro pais (RNF04).
+ZONA_HORARIA = os.environ.get("ZONA_HORARIA", "America/Puerto_Rico")
+
+
+@app.template_filter("fecha_local")
+def fecha_local(momento, formato="%d/%m/%Y %I:%M %p"):
+    """Convierte a la zona horaria configurada una marca de tiempo
+    guardada en UTC. Si la zona no esta disponible en el sistema se
+    muestra la hora tal cual, sin romper la pagina."""
+    if momento is None:
+        return ""
+    try:
+        from zoneinfo import ZoneInfo
+        local = momento.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(ZONA_HORARIA))
+    except Exception:  # noqa: BLE001
+        local = momento
+    return local.strftime(formato)
 
 
 @login_manager.user_loader
@@ -364,6 +392,97 @@ def exportar_reporte():
     nombre = f"gastos_{periodo}_{datos['inicio'].isoformat()}.csv"
     return Response(contenido, mimetype="text/csv",
                     headers={"Content-Disposition": f"attachment; filename={nombre}"})
+
+
+# =====================================================================
+# RF08: Recomendaciones de ahorro asistidas por inteligencia artificial
+# La logica vive en recomendaciones.py; aqui se reunen los datos, se
+# guarda el resultado y se coordina la pantalla.
+# =====================================================================
+
+def _resumen_para_recomendar(mes, anio):
+    """Reune el resumen agregado del mes que se enviara al analizador.
+    Lee los gastos del mes y del mes anterior (para medir variaciones y
+    detectar montos repetidos) y la comparacion contra el presupuesto.
+    RNF03: todas las consultas filtran por usuario_id."""
+    inicio, fin = _rango_del_mes(mes, anio)
+    mes_previo, anio_previo = presupuesto.mes_desplazado(mes, anio, -1)
+    inicio_previo, fin_previo = _rango_del_mes(mes_previo, anio_previo)
+
+    def _gastos_entre(desde, hasta):
+        return (Gasto.query
+                .filter(Gasto.usuario_id == current_user.id,
+                        Gasto.fecha >= desde,
+                        Gasto.fecha <= hasta)
+                .all())
+
+    gastos_mes = _gastos_entre(inicio, fin)
+    gastos_previos = _gastos_entre(inicio_previo, fin_previo)
+    return recomendaciones.construir_resumen(
+        presupuesto.etiqueta_mes(mes, anio),
+        presupuesto.gasto_por_categoria(gastos_mes),
+        presupuesto.gasto_por_categoria(gastos_previos),
+        _comparacion_del_mes(mes, anio),
+        gastos_mes + gastos_previos,
+    )
+
+
+@app.route("/recomendaciones")
+@login_required
+def ver_recomendaciones():
+    """RF08: muestra el historial de recomendaciones del usuario y el
+    resumen del mes sobre el que se generarian las proximas."""
+    mes, anio = _mes_anio(request.args)
+    historial = (Recomendacion.query
+                 .filter_by(usuario_id=current_user.id)
+                 .order_by(Recomendacion.fecha.desc(), Recomendacion.id.desc())
+                 .limit(20)
+                 .all())
+    return render_template(
+        "recomendaciones.html",
+        resumen=_resumen_para_recomendar(mes, anio),
+        historial=historial,
+        mes=mes,
+        anio=anio,
+        etiqueta=presupuesto.etiqueta_mes(mes, anio),
+        hay_clave=recomendaciones.hay_clave(),
+        error=request.args.get("error"),
+        origen=request.args.get("origen"),
+    )
+
+
+@app.route("/recomendaciones/generar", methods=["POST"])
+@login_required
+def generar_recomendaciones():
+    """RF08: genera un conjunto nuevo de recomendaciones y lo guarda.
+    Se hace con un boton y no al cargar la pagina para no llamar al
+    servicio externo en cada visita."""
+    mes, anio = _mes_anio(request.form)
+    sugerencias, origen, error = recomendaciones.generar(
+        _resumen_para_recomendar(mes, anio))
+    for sugerencia in sugerencias:
+        db.session.add(Recomendacion(
+            texto=sugerencia["texto"],
+            ahorro_estimado=sugerencia["ahorro_estimado"],
+            origen=origen,
+            usuario_id=current_user.id,
+        ))
+    db.session.commit()
+    return redirect(url_for("ver_recomendaciones", mes=mes, anio=anio,
+                            origen=origen, error=error))
+
+
+@app.route("/recomendaciones/<int:recomendacion_id>/aplicar", methods=["POST"])
+@login_required
+def aplicar_recomendacion(recomendacion_id):
+    """Marca una recomendacion como aplicada o la desmarca. Este historial
+    es el que permitira medir en la validacion si el usuario cambia su
+    conducta (seccion 5.3.5 de la Tarea #2)."""
+    recomendacion = Recomendacion.query.filter_by(
+        id=recomendacion_id, usuario_id=current_user.id).first_or_404()
+    recomendacion.aplicada = not recomendacion.aplicada
+    db.session.commit()
+    return redirect(url_for("ver_recomendaciones"))
 
 
 # ---------------------------------------------------------------------

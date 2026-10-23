@@ -14,6 +14,9 @@ instance/
 # Configuracion local y claves (nunca subir la clave de Groq)
 .env
 
+# Configuracion local del editor
+.vscode/
+
 # Archivos del sistema
 .DS_Store
 Thumbs.db

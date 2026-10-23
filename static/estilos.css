@@ -310,3 +310,56 @@ tbody tr:hover { background: #fafbfc; }
   font-size: .88rem;
   margin: 10px 0 16px;
 }
+
+/* =====================================================================
+   RECOMENDACIONES DE AHORRO (RF08)
+   Cada recomendacion es una tarjeta con su origen, su ahorro estimado y
+   el boton para marcarla como aplicada. El origen se distingue por
+   etiqueta de texto y no solo por color (RNF01, accesibilidad).
+   ===================================================================== */
+
+.aviso.ok {
+  background: var(--acento-claro);
+  color: var(--acento);
+  border-color: #c5ddda;
+}
+
+.lista-recomendaciones { display: flex; flex-direction: column; gap: 14px; }
+
+.recomendacion { margin-bottom: 0; }
+.recomendacion.aplicada { border-left: 4px solid var(--acento); background: #fbfdfd; }
+
+.cabecera-recomendacion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.cabecera-recomendacion .fecha { color: var(--texto-suave); font-size: .82rem; }
+
+/* Etiqueta del nivel que genero la recomendacion */
+.origen {
+  font-size: .74rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: #eef2f4;
+  color: var(--texto-suave);
+}
+.origen.ia { background: var(--acento-claro); color: var(--acento); }
+
+.texto-recomendacion { margin: 0 0 14px; }
+
+.pie-recomendacion {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pie-recomendacion .ahorro { font-weight: 600; color: var(--acento); }
+.pie-recomendacion form { margin: 0; }
+.pie-recomendacion button { font-size: .85rem; padding: 6px 12px; }

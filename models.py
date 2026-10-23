@@ -6,7 +6,21 @@ Cada clase representa una tabla de la base de datos SQLite.
 
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def ahora_utc():
+    """Marca de tiempo actual en UTC, sin zona horaria.
+
+    Las fechas se GUARDAN siempre en UTC y se CONVIERTEN a la zona del
+    usuario al mostrarlas. Es la practica habitual: si se guardara la
+    hora local, los datos cambiarian de significado al mover el sistema
+    a un servidor de otro pais. La conversion para mostrar vive en el
+    filtro fecha_local de app.py.
+
+    Se usa datetime.now(timezone.utc) porque el metodo antiguo quedo
+    obsoleto a partir de Python 3.12."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 db = SQLAlchemy()
 
@@ -18,7 +32,7 @@ class Usuario(db.Model, UserMixin):
     nombre = db.Column(db.String(100), nullable=False)
     correo = db.Column(db.String(120), unique=True, nullable=False)
     contrasena_hash = db.Column(db.String(255), nullable=False)
-    fecha_registro = db.Column(db.DateTime, default=datetime.utcnow)
+    fecha_registro = db.Column(db.DateTime, default=ahora_utc)
 
     gastos = db.relationship("Gasto", backref="usuario")
     categorias = db.relationship("Categoria", backref="usuario")
@@ -41,7 +55,7 @@ class Gasto(db.Model):
     Es la fuente de datos de los reportes (RF06) y del analisis de
     patrones para las recomendaciones (RF08)."""
     id = db.Column(db.Integer, primary_key=True)
-    fecha = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    fecha = db.Column(db.Date, nullable=False, default=lambda: ahora_utc().date())
     monto = db.Column(db.Float, nullable=False)
     descripcion = db.Column(db.String(200))
     metodo_pago = db.Column(db.String(40))
@@ -79,8 +93,11 @@ class Recomendacion(db.Model):
     El campo aplicada permite medir en la validacion si el usuario
     cambia su conducta, segun la seccion 5.3.5 de la Tarea #2."""
     id = db.Column(db.Integer, primary_key=True)
-    fecha = db.Column(db.DateTime, default=datetime.utcnow)
+    fecha = db.Column(db.DateTime, default=ahora_utc)
     texto = db.Column(db.Text, nullable=False)
     ahorro_estimado = db.Column(db.Float)
     aplicada = db.Column(db.Boolean, default=False)
+    # Nivel que genero la recomendacion: "ia" o "reglas". Permite comparar
+    # la calidad de los dos niveles durante la validacion del proyecto.
+    origen = db.Column(db.String(20), default="reglas")
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuario.id"), nullable=False)
