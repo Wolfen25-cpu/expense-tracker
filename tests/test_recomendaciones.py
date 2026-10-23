@@ -172,6 +172,29 @@ def test_regla_de_gasto_recurrente():
     assert "recurrente" in textos
 
 
+def test_un_gasto_fijo_esencial_no_se_recomienda_cancelar():
+    """El alquiler se repite todos los meses igual que una suscripcion,
+    pero recomendar cancelarlo seria absurdo. Para los gastos esenciales
+    la via es renegociar, y el ahorro estimado es una rebaja parcial, no
+    el monto completo."""
+    resumen = resumen_de(
+        {"Vivienda": 650.0},
+        recurrentes=[{"categoria": "Vivienda", "monto": 650.0, "veces": 3}],
+    )
+    sugerencias = recomendaciones.recomendar_por_reglas(resumen)
+    textos = " ".join(s["texto"] for s in sugerencias)
+    assert "cancelar" not in textos.lower()
+    assert "renegociarlo" in textos
+    assert all(s["ahorro_estimado"] < 650.0 for s in sugerencias)
+
+
+def test_una_categoria_desconocida_se_trata_como_fija():
+    """Ante una categoria personalizada que el sistema no conoce, la
+    opcion prudente es no sugerir cancelarla."""
+    assert recomendaciones.clasificar_recurrente("Jardinería") == recomendaciones.TIPO_FIJO
+    assert recomendaciones.clasificar_recurrente("Mensualidades") == recomendaciones.TIPO_CANCELABLE
+
+
 def test_sin_problemas_devuelve_un_mensaje_positivo():
     """Nunca se devuelve una lista vacia: la pantalla siempre dice algo."""
     sugerencias = recomendaciones.recomendar_por_reglas(resumen_de({"Salud": 10.0}))
@@ -277,7 +300,7 @@ def test_las_recomendaciones_son_privadas(cliente, sin_red):
     registrar(cliente)
     crear_gasto(cliente, fecha=date.today().isoformat(), monto="80", categoria_id=1)
     cliente.post("/recomendaciones/generar", follow_redirects=True)
-    cliente.get("/logout")
+    cliente.post("/logout")
     registrar(cliente, nombre="Luis", correo="luis@ejemplo.com", contrasena="clave456")
     pagina = cliente.get("/recomendaciones").get_data(as_text=True)
     assert "Todavía no has generado recomendaciones" in pagina
@@ -287,7 +310,7 @@ def test_no_se_puede_aplicar_la_recomendacion_de_otro(cliente, sin_red):
     registrar(cliente)
     crear_gasto(cliente, fecha=date.today().isoformat(), monto="80", categoria_id=1)
     cliente.post("/recomendaciones/generar", follow_redirects=True)
-    cliente.get("/logout")
+    cliente.post("/logout")
     registrar(cliente, nombre="Luis", correo="luis@ejemplo.com", contrasena="clave456")
     assert cliente.post("/recomendaciones/1/aplicar").status_code == 404
 

@@ -28,9 +28,13 @@
 
   <!-- RF02: alta de gasto. La fecha llega precargada con el dia de hoy
        para reducir el tiempo de registro (RNF01). -->
+  <!-- Error de validacion devuelto por el servidor (RNF03) -->
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
   <h1>Registrar un gasto</h1>
   <div class="tarjeta">
     <form method="POST" action="{{ url_for('gastos') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="campos">
         <div class="campo">
           <label for="fecha">Fecha</label>
@@ -51,12 +55,10 @@
         </div>
         <div class="campo">
           <label for="metodo">Método de pago</label>
+          <!-- La lista de metodos viene del servidor, que es tambien
+               quien la valida al recibir el formulario -->
           <select id="metodo" name="metodo_pago">
-            <option>Efectivo</option>
-            <option>Tarjeta de débito</option>
-            <option>Tarjeta de crédito</option>
-            <option>Transferencia</option>
-            <option>Otro</option>
+            {% for m in metodos %}<option>{{ m }}</option>{% endfor %}
           </select>
         </div>
         <div class="campo">
@@ -103,6 +105,7 @@
               <form method="POST" action="{{ url_for('eliminar_gasto', gasto_id=g.id) }}"
                     style="display:inline"
                     onsubmit="return confirm('¿Eliminar este gasto?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="boton-peligro">Eliminar</button>
               </form>
             </td>

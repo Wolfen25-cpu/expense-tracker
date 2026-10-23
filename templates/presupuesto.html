@@ -108,6 +108,7 @@
   <h2>Definir el presupuesto de {{ etiqueta }}</h2>
   <div class="tarjeta">
     <form method="POST" action="{{ url_for('presupuesto_mensual') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="mes" value="{{ mes }}">
       <input type="hidden" name="anio" value="{{ anio }}">
 

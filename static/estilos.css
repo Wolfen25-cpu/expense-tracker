@@ -363,3 +363,16 @@ tbody tr:hover { background: #fafbfc; }
 .pie-recomendacion .ahorro { font-weight: 600; color: var(--acento); }
 .pie-recomendacion form { margin: 0; }
 .pie-recomendacion button { font-size: .85rem; padding: 6px 12px; }
+
+/* --- Boton de cerrar sesion en la barra (va por POST, no es un enlace) --- */
+.salir-form { margin: 0; display: inline; }
+button.salir {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+button.salir:hover { text-decoration: underline; }

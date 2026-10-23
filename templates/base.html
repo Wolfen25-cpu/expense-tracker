@@ -23,11 +23,17 @@
     <span class="marca">Rastreador de Gastos</span>
     <nav>
       <a href="{{ url_for('gastos') }}">Mis gastos</a>
+      <a href="{{ url_for('categorias_personalizadas') }}">Categorías</a>
       <a href="{{ url_for('presupuesto_mensual') }}">Presupuesto</a>
       <a href="{{ url_for('reporte') }}">Reportes</a>
       <a href="{{ url_for('ver_recomendaciones') }}">Recomendaciones</a>
       <span class="usuario">{{ current_user.nombre }}</span>
-      <a class="salir" href="{{ url_for('logout') }}">Cerrar sesión</a>
+      <!-- Cerrar sesion va por POST con token para que ninguna otra
+           pagina pueda cerrar la sesion del usuario a sus espaldas -->
+      <form method="POST" action="{{ url_for('logout') }}" class="salir-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="salir">Cerrar sesión</button>
+      </form>
     </nav>
   </header>
   {% endif %}

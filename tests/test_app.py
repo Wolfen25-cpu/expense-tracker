@@ -20,7 +20,7 @@ def test_rf01_registro_guarda_la_contrasena_hasheada(cliente):
 
 def test_rf01_login_correcto_e_incorrecto(cliente):
     registrar(cliente)
-    cliente.get("/logout")
+    cliente.post("/logout")
     malo = cliente.post("/login", data={"correo": "ana@ejemplo.com", "contrasena": "incorrecta"})
     assert "incorrectos" in malo.get_data(as_text=True)
     bueno = cliente.post("/login", data={"correo": "ana@ejemplo.com", "contrasena": "clave123"})
@@ -29,7 +29,7 @@ def test_rf01_login_correcto_e_incorrecto(cliente):
 
 def test_rf01_correo_duplicado_es_rechazado(cliente):
     registrar(cliente)
-    cliente.get("/logout")
+    cliente.post("/logout")
     repetido = registrar(cliente, nombre="Otra")
     assert "ya está registrado" in repetido.get_data(as_text=True)
     assert Usuario.query.count() == 1
@@ -75,7 +75,7 @@ def test_rnf03_un_usuario_no_puede_editar_ni_eliminar_gastos_ajenos(cliente):
     registrar(cliente, nombre="Ana", correo="ana@ejemplo.com")
     crear_gasto(cliente, monto="10.00")
     gasto_id = Gasto.query.one().id
-    cliente.get("/logout")
+    cliente.post("/logout")
 
     registrar(cliente, nombre="Beto", correo="beto@ejemplo.com")
     assert cliente.get(f"/gastos/{gasto_id}/editar").status_code == 404
@@ -86,7 +86,7 @@ def test_rnf03_un_usuario_no_puede_editar_ni_eliminar_gastos_ajenos(cliente):
 def test_rnf03_los_reportes_solo_incluyen_gastos_propios(cliente):
     registrar(cliente, nombre="Ana", correo="ana@ejemplo.com")
     crear_gasto(cliente, fecha="2026-10-15", monto="500.00", descripcion="Solo de Ana")
-    cliente.get("/logout")
+    cliente.post("/logout")
 
     registrar(cliente, nombre="Beto", correo="beto@ejemplo.com")
     crear_gasto(cliente, fecha="2026-10-15", monto="7.00", descripcion="Solo de Beto")

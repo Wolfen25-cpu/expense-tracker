@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+<!--
+  PANTALLA DE CATEGORIAS (RF04).
+  Lista las categorias del sistema y las propias del usuario, permite
+  crear nuevas y eliminar las propias que todavia no tienen gastos.
+-->
+
+{% block titulo %}Categorías{% endblock %}
+
+{% block contenido %}
+
+  <h1>Categorías</h1>
+
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
+  <!-- Alta de una categoria propia -->
+  <div class="tarjeta">
+    <form method="POST" action="{{ url_for('categorias_personalizadas') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="campo campo-total">
+        <label for="nombre">Nueva categoría</label>
+        <input id="nombre" name="nombre" maxlength="60"
+               placeholder="Por ejemplo: Mascotas" required>
+      </div>
+      <div class="acciones">
+        <button type="submit">Crear categoría</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Listado. Las del sistema no se pueden eliminar, y las propias solo
+       si no tienen gastos asociados: borrarlas dejaria esos gastos sin
+       categoria y falsearia los reportes. -->
+  <div class="tarjeta">
+    <div class="tabla-envoltura">
+      <table>
+        <thead>
+          <tr><th>Categoría</th><th>Tipo</th><th>Gastos</th><th>Acciones</th></tr>
+        </thead>
+        <tbody>
+        {% for c in categorias %}
+          <tr>
+            <td><span class="etiqueta-categoria">{{ c.nombre }}</span></td>
+            <td>{% if c.es_predefinida %}Del sistema{% else %}Personalizada{% endif %}</td>
+            <td>{{ usos.get(c.id, 0) }}</td>
+            <td>
+              {% if c.es_predefinida %}
+                <span class="pct">No se puede eliminar</span>
+              {% elif usos.get(c.id, 0) > 0 %}
+                <span class="pct">Tiene gastos asociados</span>
+              {% else %}
+                <form method="POST" action="{{ url_for('eliminar_categoria', categoria_id=c.id) }}"
+                      onsubmit="return confirm('¿Eliminar esta categoría?')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" class="boton-peligro">Eliminar</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+{% endblock %}

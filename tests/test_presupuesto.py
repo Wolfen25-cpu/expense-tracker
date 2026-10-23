@@ -142,7 +142,7 @@ def test_el_presupuesto_es_privado_de_cada_usuario(cliente):
     """RNF03: el presupuesto de un usuario no aparece en la cuenta de otro."""
     registrar(cliente)
     cliente.post("/presupuesto", data={"monto_total": "5000", "categoria_1": "999"})
-    cliente.get("/logout")
+    cliente.post("/logout")
     registrar(cliente, nombre="Luis", correo="luis@ejemplo.com", contrasena="clave456")
     pagina = cliente.get("/presupuesto").get_data(as_text=True)
     assert "999.00" not in pagina

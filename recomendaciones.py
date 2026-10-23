@@ -44,6 +44,26 @@ UMBRAL_CONCENTRACION = 35   # % del gasto total en una sola categoria
 # pura aritmetica y el aviso no aportaria nada al usuario.
 MINIMO_CATEGORIAS_CONCENTRACION = 3
 MINIMO_MESES_RECURRENTE = 2  # meses distintos en que debe repetirse el gasto
+
+# No todo gasto recurrente se puede cancelar. El alquiler y la luz se
+# repiten todos los meses igual que una suscripcion, pero recomendar
+# "cancelarlos" seria absurdo. Por eso se distinguen dos tipos:
+#   cancelable  servicios opcionales que el usuario puede dar de baja
+#   fijo        gastos esenciales, donde la via es renegociar o buscar
+#               una alternativa mas barata, no eliminarlos
+# Ante una categoria personalizada que el sistema no conoce se asume
+# fijo, que es la recomendacion prudente: nunca se sugiere cancelar algo
+# cuya naturaleza se desconoce.
+CATEGORIAS_CANCELABLES = {"mensualidades", "entretenimiento"}
+TIPO_CANCELABLE = "cancelable"
+TIPO_FIJO = "fijo"
+
+
+def clasificar_recurrente(categoria):
+    """Decide si un gasto recurrente admite cancelacion o es esencial."""
+    if categoria.strip().lower() in CATEGORIAS_CANCELABLES:
+        return TIPO_CANCELABLE
+    return TIPO_FIJO
 MAXIMO_RECOMENDACIONES = 5
 
 ORIGEN_REGLAS = "reglas"
@@ -79,6 +99,10 @@ INSTRUCCIONES = (
     "antes que inventar.\n"
     "6. Prioriza las categorias que se pasaron del presupuesto, las que "
     "crecieron respecto al mes anterior y los gastos recurrentes.\n"
+    "7. En la lista de recurrentes, los marcados como cancelable admiten "
+    "darse de baja; los marcados como fijo son esenciales (vivienda, "
+    "salud, alimentacion) y para esos solo puedes sugerir renegociar o "
+    "buscar alternativas mas baratas, nunca cancelarlos.\n"
     "Cada recomendacion debe ser concreta y accionable, no un consejo "
     "generico. Responde solo con un objeto JSON con esta forma: "
     '{"recomendaciones": [{"texto": "...", "ahorro_estimado": 00.00}]}'
@@ -117,7 +141,10 @@ def detectar_recurrentes(gastos):
     repetidos = conteo[conteo["meses"] >= MINIMO_MESES_RECURRENTE]
     repetidos = repetidos.sort_values("monto", ascending=False)
     return [
-        {"categoria": fila.categoria, "monto": float(fila.monto), "veces": int(fila.meses)}
+        {"categoria": fila.categoria,
+         "monto": float(fila.monto),
+         "veces": int(fila.meses),
+         "tipo": clasificar_recurrente(fila.categoria)}
         for fila in repetidos.itertuples(index=False)
     ]
 
@@ -218,16 +245,30 @@ def recomendar_por_reglas(resumen):
                 "ahorro_estimado": round(c["total"] * 0.10, 2),
             })
 
-    # Regla 4: gastos recurrentes, que son los candidatos naturales a
-    # revisarse porque se renuevan solos todos los meses.
+    # Regla 4: gastos recurrentes, candidatos naturales a revisarse
+    # porque se renuevan solos todos los meses. El consejo cambia segun
+    # el gasto se pueda cancelar o sea esencial.
     for r in resumen["recurrentes"]:
-        sugerencias.append({
-            "texto": (f"Detecte un gasto recurrente de ${r['monto']:.2f} en "
-                      f"{r['categoria']} que se repite en {r['veces']} meses. "
-                      f"Si ya no lo usas, cancelarlo ahorra "
-                      f"${r['monto'] * 12:.2f} al ano."),
-            "ahorro_estimado": r["monto"],
-        })
+        # Si el resumen no trae el tipo (por ejemplo, uno construido a
+        # mano), se deduce de la categoria en lugar de asumir.
+        tipo = r.get("tipo") or clasificar_recurrente(r["categoria"])
+        if tipo == TIPO_CANCELABLE:
+            sugerencias.append({
+                "texto": (f"Detecte un gasto recurrente de ${r['monto']:.2f} en "
+                          f"{r['categoria']} que se repite en {r['veces']} meses. "
+                          f"Si ya no lo usas, cancelarlo ahorra "
+                          f"${r['monto'] * 12:.2f} al ano."),
+                "ahorro_estimado": r["monto"],
+            })
+        else:
+            sugerencias.append({
+                "texto": (f"{r['categoria']} tiene un gasto fijo de "
+                          f"${r['monto']:.2f} que se repite en {r['veces']} meses. "
+                          f"No se puede eliminar, pero renegociarlo o buscar una "
+                          f"alternativa mas barata reduciria tu gasto base; una "
+                          f"rebaja del 10% serian ${r['monto'] * 0.10:.2f} al mes."),
+                "ahorro_estimado": round(r["monto"] * 0.10, 2),
+            })
 
     if not sugerencias:
         # Estado sano: se devuelve una sola recomendacion en lugar de una

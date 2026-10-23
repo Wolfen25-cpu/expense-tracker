@@ -20,6 +20,11 @@ def cliente():
     """Cliente de pruebas con una base de datos limpia en cada prueba:
     se recrean las tablas y se cargan las categorias predefinidas."""
     app.config["TESTING"] = True
+    # Las pruebas envian formularios directamente, sin pasar por el
+    # navegador, asi que no tienen el token CSRF. Se desactiva solo en
+    # las pruebas; en la aplicacion real sigue activo. La prueba
+    # test_seguridad comprueba que la proteccion funciona.
+    app.config["WTF_CSRF_ENABLED"] = False
     with app.app_context():
         db.drop_all()
         db.create_all()
@@ -35,6 +40,11 @@ def registrar(cliente, nombre="Ana", correo="ana@ejemplo.com", contrasena="clave
     return cliente.post("/registro", data={
         "nombre": nombre, "correo": correo, "contrasena": contrasena,
     })
+
+
+def cerrar_sesion(cliente):
+    """Cierra la sesion. Es POST porque la ruta ya no admite GET."""
+    return cliente.post("/logout")
 
 
 def crear_gasto(cliente, fecha="2026-10-15", monto="25.50", categoria_id=1,

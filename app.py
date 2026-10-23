@@ -9,10 +9,15 @@ tres capas descrita en la seccion 5.2.1 de la Tarea #2.
 """
 
 import os
+import re
+import sqlite3
 
 from dotenv import load_dotenv
 from flask import Flask, Response, render_template, request, redirect, url_for
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_wtf.csrf import CSRFProtect
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import date, datetime, timedelta, timezone
 from models import (db, Usuario, Categoria, Gasto,
@@ -39,8 +44,49 @@ load_dotenv()
 # ---------------------------------------------------------------------
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("GASTOS_DB", "sqlite:///gastos.db")
-app.config["SECRET_KEY"] = os.environ.get("GASTOS_SECRET_KEY", "clave-temporal-de-desarrollo")
+CLAVE_DE_DESARROLLO = "clave-temporal-de-desarrollo"
+app.config["SECRET_KEY"] = os.environ.get("GASTOS_SECRET_KEY", CLAVE_DE_DESARROLLO)
 db.init_app(app)
+
+# ---------------------------------------------------------------------
+# Seguridad de la sesion (RNF03)
+#   HTTPONLY   la cookie de sesion no puede leerse desde JavaScript, lo
+#              que limita el robo de sesion si hubiera un XSS.
+#   SAMESITE   el navegador no envia la cookie en peticiones que vengan
+#              de otro sitio, primera barrera contra CSRF.
+#   SECURE     la cookie solo viaja por HTTPS. Se activa al desplegar
+#              con la variable GASTOS_COOKIE_SEGURA=1; en desarrollo se
+#              deja apagada porque se trabaja sobre http://127.0.0.1.
+# ---------------------------------------------------------------------
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("GASTOS_COOKIE_SEGURA", "0") == "1",
+)
+
+# Proteccion contra CSRF (falsificacion de peticiones entre sitios).
+# Sin esto, una pagina maliciosa abierta en otra pestana podria enviar
+# un formulario a esta aplicacion aprovechando la sesion ya iniciada del
+# usuario, por ejemplo para borrar sus gastos. CSRFProtect exige que todo
+# formulario POST incluya un token que solo esta aplicacion conoce.
+csrf = CSRFProtect(app)
+
+# SQLite no verifica las claves foraneas a menos que se le pida en cada
+# conexion. Sin esta linea se podrian guardar gastos apuntando a
+# categorias que no existen y la base quedaria inconsistente.
+@event.listens_for(Engine, "connect")
+def _activar_claves_foraneas(conexion, _registro):
+    if isinstance(conexion, sqlite3.Connection):
+        cursor = conexion.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+
+if (app.config["SECRET_KEY"] == CLAVE_DE_DESARROLLO
+        and os.environ.get("GASTOS_ENTORNO") == "produccion"):
+    raise RuntimeError(
+        "Define GASTOS_SECRET_KEY antes de desplegar: con la clave de "
+        "desarrollo cualquiera podria falsificar sesiones de usuario.")
 
 # Gestion de sesiones de usuario (RF01)
 login_manager = LoginManager(app)
@@ -74,6 +120,115 @@ def cargar_usuario(user_id):
     return db.session.get(Usuario, int(user_id))
 
 
+# =====================================================================
+# Validacion de datos de entrada (RNF03)
+# Nunca se confia en lo que llega del formulario: el navegador valida
+# para comodidad del usuario, pero cualquiera puede enviar una peticion
+# saltandose esa validacion. Todo se vuelve a comprobar en el servidor.
+# =====================================================================
+
+MONTO_MAXIMO = 1_000_000.00
+FECHA_MINIMA = date(2000, 1, 1)
+LARGO_MINIMO_CLAVE = 8
+LARGO_MAXIMO_NOMBRE = 100
+LARGO_MAXIMO_DESCRIPCION = 200
+LARGO_MAXIMO_CATEGORIA = 60
+
+METODOS_PAGO = ["Efectivo", "Tarjeta de débito", "Tarjeta de crédito",
+                "Transferencia", "Otro"]
+
+PATRON_CORREO = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _texto(valor, largo_maximo):
+    """Limpia un texto del formulario y lo recorta al largo que admite la
+    base de datos, para que un envio manipulado no provoque un error."""
+    return (valor or "").strip()[:largo_maximo]
+
+
+def _validar_monto(valor):
+    """Devuelve (monto, error). Un monto debe ser un numero positivo y
+    razonable: el formulario dice min=0, pero eso solo lo respeta el
+    navegador."""
+    try:
+        monto = round(float(valor), 2)
+    except (TypeError, ValueError):
+        return None, "El monto debe ser un número."
+    if monto <= 0:
+        return None, "El monto debe ser mayor que cero."
+    if monto > MONTO_MAXIMO:
+        return None, "El monto excede el máximo permitido."
+    return monto, None
+
+
+def _validar_fecha(valor):
+    """Devuelve (fecha, error). Se acotan las fechas absurdas, tanto
+    hacia atras como hacia adelante."""
+    try:
+        fecha = datetime.strptime(valor, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None, "La fecha no tiene un formato válido."
+    if fecha < FECHA_MINIMA:
+        return None, "La fecha es demasiado antigua."
+    if fecha > date.today() + timedelta(days=365):
+        return None, "La fecha está demasiado lejos en el futuro."
+    return fecha, None
+
+
+def _categorias_disponibles():
+    """Categorias que puede usar el usuario conectado: las predefinidas
+    del sistema mas las que el mismo haya creado (RF04)."""
+    return (Categoria.query
+            .filter(db.or_(Categoria.es_predefinida.is_(True),
+                           Categoria.usuario_id == current_user.id))
+            .order_by(Categoria.es_predefinida.desc(), Categoria.nombre)
+            .all())
+
+
+def _validar_categoria(valor):
+    """Devuelve (categoria, error). Comprueba que la categoria exista y
+    que sea del sistema o del propio usuario: sin esta verificacion,
+    alguien podria enviar el identificador de la categoria privada de
+    otra persona y asociarle sus gastos (RNF03)."""
+    try:
+        identificador = int(valor)
+    except (TypeError, ValueError):
+        return None, "La categoría no es válida."
+    categoria = db.session.get(Categoria, identificador)
+    if categoria is None:
+        return None, "La categoría no existe."
+    if not categoria.es_predefinida and categoria.usuario_id != current_user.id:
+        return None, "La categoría no es válida."
+    return categoria, None
+
+
+def _validar_metodo_pago(valor):
+    """Solo se aceptan los metodos de la lista. Cualquier otro texto se
+    guarda como Otro en lugar de almacenarse tal cual."""
+    return valor if valor in METODOS_PAGO else "Otro"
+
+
+def _datos_del_gasto(formulario):
+    """Valida de una vez todos los campos de un gasto.
+    Devuelve (datos, error) y se usa tanto al crear como al editar."""
+    fecha, error = _validar_fecha(formulario.get("fecha"))
+    if error:
+        return None, error
+    monto, error = _validar_monto(formulario.get("monto"))
+    if error:
+        return None, error
+    categoria, error = _validar_categoria(formulario.get("categoria_id"))
+    if error:
+        return None, error
+    return {
+        "fecha": fecha,
+        "monto": monto,
+        "descripcion": _texto(formulario.get("descripcion"), LARGO_MAXIMO_DESCRIPCION),
+        "metodo_pago": _validar_metodo_pago(formulario.get("metodo_pago")),
+        "categoria_id": categoria.id,
+    }, None
+
+
 # Categorias base del sistema (RF04)
 CATEGORIAS_BASE = ["Alimentación", "Transporte", "Vivienda", "Salud",
                    "Entretenimiento", "Educación", "Mensualidades", "Otros"]
@@ -83,20 +238,38 @@ CATEGORIAS_BASE = ["Alimentación", "Transporte", "Vivienda", "Salud",
 # RF01: Gestion de usuarios (registro, autenticacion, cierre de sesion)
 # =====================================================================
 
+def _normalizar_correo(valor):
+    """Los correos se guardan en minusculas y sin espacios. De lo
+    contrario "Ana@x.com" y "ana@x.com" crearian dos cuentas distintas
+    para la misma persona y el inicio de sesion fallaria segun como se
+    escribiera."""
+    return (valor or "").strip().lower()
+
+
 @app.route("/registro", methods=["GET", "POST"])
 def registro():
     """Crea una cuenta nueva.
-    RNF03 (seguridad): la contrasena se almacena con hash irreversible
-    mediante generate_password_hash; el correo es unico en la tabla."""
+    RNF03: la contrasena se almacena con hash irreversible mediante
+    generate_password_hash, el correo es unico, y todas las reglas se
+    verifican en el servidor y no solo en el formulario."""
     if request.method == "POST":
-        correo = request.form["correo"]
+        nombre = _texto(request.form.get("nombre"), LARGO_MAXIMO_NOMBRE)
+        correo = _normalizar_correo(request.form.get("correo"))
+        clave = request.form.get("contrasena") or ""
+
+        if not nombre:
+            return render_template("registro.html", error="Escribe tu nombre.")
+        if not PATRON_CORREO.match(correo):
+            return render_template("registro.html", error="El correo no es válido.")
+        if len(clave) < LARGO_MINIMO_CLAVE:
+            return render_template(
+                "registro.html",
+                error=f"La contraseña debe tener al menos {LARGO_MINIMO_CLAVE} caracteres.")
         if Usuario.query.filter_by(correo=correo).first():
-            return "Ese correo ya está registrado. <a href='/registro'>Volver</a>"
-        usuario = Usuario(
-            nombre=request.form["nombre"],
-            correo=correo,
-            contrasena_hash=generate_password_hash(request.form["contrasena"])
-        )
+            return render_template("registro.html", error="Ese correo ya está registrado.")
+
+        usuario = Usuario(nombre=nombre, correo=correo,
+                          contrasena_hash=generate_password_hash(clave))
         db.session.add(usuario)
         db.session.commit()
         login_user(usuario)
@@ -107,20 +280,26 @@ def registro():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Autentica al usuario comparando el hash almacenado.
-    RNF03: nunca se compara la contrasena en texto plano."""
+    RNF03: nunca se compara la contrasena en texto plano, y el mensaje de
+    error es el mismo tanto si falla el correo como la contrasena, para
+    no revelar que correos estan registrados en el sistema."""
     if request.method == "POST":
-        usuario = Usuario.query.filter_by(correo=request.form["correo"]).first()
-        if usuario and check_password_hash(usuario.contrasena_hash, request.form["contrasena"]):
+        correo = _normalizar_correo(request.form.get("correo"))
+        clave = request.form.get("contrasena") or ""
+        usuario = Usuario.query.filter_by(correo=correo).first()
+        if usuario and check_password_hash(usuario.contrasena_hash, clave):
             login_user(usuario)
             return redirect(url_for("inicio"))
-        return "Correo o contraseña incorrectos. <a href='/login'>Volver</a>"
+        return render_template("login.html", error="Correo o contraseña incorrectos.")
     return render_template("login.html")
 
 
-@app.route("/logout")
+@app.route("/logout", methods=["POST"])
 @login_required
 def logout():
-    """Cierra la sesion activa."""
+    """Cierra la sesion activa. Se usa POST y no un enlace para que otra
+    pagina no pueda cerrar la sesion del usuario con solo cargar una
+    imagen que apunte a esta direccion (RNF03)."""
     logout_user()
     return redirect(url_for("login"))
 
@@ -145,15 +324,10 @@ def gastos():
     RNF03: el filtro por usuario_id garantiza que cada usuario solo
     accede a sus propios datos."""
     if request.method == "POST":
-        gasto = Gasto(
-            fecha=datetime.strptime(request.form["fecha"], "%Y-%m-%d").date(),
-            monto=float(request.form["monto"]),
-            descripcion=request.form.get("descripcion"),
-            metodo_pago=request.form.get("metodo_pago"),
-            categoria_id=int(request.form["categoria_id"]),
-            usuario_id=current_user.id
-        )
-        db.session.add(gasto)
+        datos, error = _datos_del_gasto(request.form)
+        if error:
+            return redirect(url_for("gastos", error=error))
+        db.session.add(Gasto(usuario_id=current_user.id, **datos))
         db.session.commit()
         return redirect(url_for("gastos"))
 
@@ -161,7 +335,7 @@ def gastos():
                   .filter_by(usuario_id=current_user.id)
                   .order_by(Gasto.fecha.desc(), Gasto.id.desc())
                   .all())
-    categorias = Categoria.query.filter_by(es_predefinida=True).all()
+    categorias = _categorias_disponibles()
     total = sum(g.monto for g in mis_gastos)
     # RF10: los avisos del mes en curso se muestran en la misma pantalla
     # donde el usuario registra, que es donde puede reaccionar a tiempo.
@@ -170,8 +344,10 @@ def gastos():
     return render_template("gastos.html",
                            gastos=mis_gastos,
                            categorias=categorias,
+                           metodos=METODOS_PAGO,
                            total=total,
                            avisos=avisos,
+                           error=request.args.get("error"),
                            hoy=hoy.isoformat())
 
 
@@ -187,16 +363,19 @@ def editar_gasto(gasto_id):
     de otro usuario manipulando la URL."""
     gasto = Gasto.query.filter_by(id=gasto_id, usuario_id=current_user.id).first_or_404()
     if request.method == "POST":
-        gasto.fecha = datetime.strptime(request.form["fecha"], "%Y-%m-%d").date()
-        gasto.monto = float(request.form["monto"])
-        gasto.descripcion = request.form.get("descripcion")
-        gasto.metodo_pago = request.form.get("metodo_pago")
-        gasto.categoria_id = int(request.form["categoria_id"])
-        db.session.commit()
-        return redirect(url_for("gastos"))
+        datos, error = _datos_del_gasto(request.form)
+        if not error:
+            for campo, valor in datos.items():
+                setattr(gasto, campo, valor)
+            db.session.commit()
+            return redirect(url_for("gastos"))
+        return render_template("editar_gasto.html", gasto=gasto,
+                               categorias=_categorias_disponibles(),
+                               metodos=METODOS_PAGO, error=error)
 
-    categorias = Categoria.query.filter_by(es_predefinida=True).all()
-    return render_template("editar_gasto.html", gasto=gasto, categorias=categorias)
+    return render_template("editar_gasto.html", gasto=gasto,
+                           categorias=_categorias_disponibles(),
+                           metodos=METODOS_PAGO)
 
 
 @app.route("/gastos/<int:gasto_id>/eliminar", methods=["POST"])
@@ -208,6 +387,72 @@ def eliminar_gasto(gasto_id):
     db.session.delete(gasto)
     db.session.commit()
     return redirect(url_for("gastos"))
+
+
+# =====================================================================
+# RF04: Categorias personalizadas del usuario
+# Las predefinidas pertenecen al sistema (usuario_id vacio) y las
+# personalizadas a quien las creo, que es el unico que las ve y las usa.
+# =====================================================================
+
+@app.route("/categorias", methods=["GET", "POST"])
+@login_required
+def categorias_personalizadas():
+    """RF04: lista las categorias disponibles y permite crear propias."""
+    error = None
+    if request.method == "POST":
+        nombre = _texto(request.form.get("nombre"), LARGO_MAXIMO_CATEGORIA)
+        if not nombre:
+            error = "Escribe un nombre para la categoría."
+        else:
+            # La comparacion ignora mayusculas y acentos del propio texto
+            # para que no convivan "Mascotas" y "mascotas".
+            existe = next(
+                (c for c in _categorias_disponibles()
+                 if c.nombre.strip().lower() == nombre.lower()), None)
+            if existe is not None:
+                error = f"Ya existe una categoría llamada {existe.nombre}."
+            else:
+                db.session.add(Categoria(nombre=nombre, es_predefinida=False,
+                                         usuario_id=current_user.id))
+                db.session.commit()
+                return redirect(url_for("categorias_personalizadas"))
+
+    # Cantidad de gastos propios por categoria: sirve para informar al
+    # usuario y para decidir si una categoria se puede eliminar.
+    usos = dict(db.session.query(Gasto.categoria_id, db.func.count(Gasto.id))
+                .filter(Gasto.usuario_id == current_user.id)
+                .group_by(Gasto.categoria_id).all())
+    return render_template("categorias.html",
+                           categorias=_categorias_disponibles(),
+                           usos=usos,
+                           error=error or request.args.get("error"))
+
+
+@app.route("/categorias/<int:categoria_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_categoria(categoria_id):
+    """RF04: elimina una categoria propia.
+
+    Dos salvaguardas: solo se puede borrar una categoria propia (nunca
+    las del sistema ni las de otro usuario), y solo si no tiene gastos
+    asociados, porque borrarla dejaria esos gastos sin categoria y
+    falsearia todos los reportes."""
+    categoria = Categoria.query.filter_by(
+        id=categoria_id, usuario_id=current_user.id, es_predefinida=False).first_or_404()
+
+    if Gasto.query.filter_by(categoria_id=categoria.id).first():
+        return redirect(url_for(
+            "categorias_personalizadas",
+            error="No se puede eliminar una categoría que ya tiene gastos."))
+
+    # Se quitan primero las asignaciones de presupuesto que la usaban,
+    # porque la base de datos ahora exige integridad referencial.
+    for detalle in PresupuestoCategoria.query.filter_by(categoria_id=categoria.id).all():
+        db.session.delete(detalle)
+    db.session.delete(categoria)
+    db.session.commit()
+    return redirect(url_for("categorias_personalizadas"))
 
 
 # =====================================================================
@@ -295,7 +540,7 @@ def presupuesto_mensual():
         # o se actualizan, y las que quedaron en blanco se eliminan del
         # detalle para no dejar presupuestos en cero.
         existentes = {d.categoria_id: d for d in registro.detalles}
-        for categoria in Categoria.query.filter_by(es_predefinida=True).all():
+        for categoria in _categorias_disponibles():
             monto = _monto(request.form.get(f"categoria_{categoria.id}"))
             detalle = existentes.get(categoria.id)
             if monto > 0 and detalle is not None:
@@ -317,7 +562,7 @@ def presupuesto_mensual():
         "presupuesto.html",
         c=comparacion,
         avisos=presupuesto.alertas(comparacion),
-        categorias=Categoria.query.filter_by(es_predefinida=True).all(),
+        categorias=_categorias_disponibles(),
         # Montos ya guardados, por id de categoria, para precargar el formulario
         asignado={d.categoria_id: d.monto for d in registro.detalles} if registro else {},
         monto_total=registro.monto_total if registro else 0.0,

@@ -8,9 +8,12 @@
 
 {% block contenido %}
 
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+
   <h1>Editar gasto</h1>
   <div class="tarjeta">
     <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="campos">
         <div class="campo">
           <label for="fecha">Fecha</label>
@@ -35,7 +38,7 @@
         <div class="campo">
           <label for="metodo">Método de pago</label>
           <select id="metodo" name="metodo_pago">
-            {% for m in ["Efectivo", "Tarjeta de débito", "Tarjeta de crédito", "Transferencia", "Otro"] %}
+            {% for m in metodos %}
               <option {% if m == gasto.metodo_pago %}selected{% endif %}>{{ m }}</option>
             {% endfor %}
           </select>

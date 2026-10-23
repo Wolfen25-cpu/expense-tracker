@@ -61,6 +61,7 @@
     </div>
 
     <form method="POST" action="{{ url_for('generar_recomendaciones') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="mes" value="{{ mes }}">
       <input type="hidden" name="anio" value="{{ anio }}">
       <div class="acciones">
@@ -92,6 +93,7 @@
               <span class="ahorro">Sin ahorro estimado</span>
             {% endif %}
             <form method="POST" action="{{ url_for('aplicar_recomendacion', recomendacion_id=r.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="boton-secundario">
                 {% if r.aplicada %}Marcada como aplicada{% else %}Marcar como aplicada{% endif %}
               </button>
