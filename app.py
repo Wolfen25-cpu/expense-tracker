@@ -13,7 +13,8 @@ import re
 import sqlite3
 
 from dotenv import load_dotenv
-from flask import Flask, Response, render_template, request, redirect, url_for
+from flask import (Flask, Response, flash, render_template, request,
+                   redirect, url_for)
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import event
@@ -22,6 +23,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import date, datetime, timedelta, timezone
 from models import (db, Usuario, Categoria, Gasto,
                     Presupuesto, PresupuestoCategoria, Recomendacion)
+import localizacion
 import presupuesto
 import recomendaciones
 import reportes
@@ -101,17 +103,38 @@ ZONA_HORARIA = os.environ.get("ZONA_HORARIA", "America/Puerto_Rico")
 
 @app.template_filter("fecha_local")
 def fecha_local(momento, formato="%d/%m/%Y %I:%M %p"):
-    """Convierte a la zona horaria configurada una marca de tiempo
-    guardada en UTC. Si la zona no esta disponible en el sistema se
-    muestra la hora tal cual, sin romper la pagina."""
+    """Convierte a la hora del usuario una marca de tiempo guardada en
+    UTC. Cada usuario tiene su propia zona horaria en el perfil; si no
+    la ha definido se usa la del servidor. Si la zona no esta disponible
+    en el sistema se muestra la hora tal cual, sin romper la pagina."""
     if momento is None:
         return ""
+    zona = getattr(current_user, "zona_horaria", None) or ZONA_HORARIA
     try:
         from zoneinfo import ZoneInfo
-        local = momento.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(ZONA_HORARIA))
+        local = momento.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(zona))
     except Exception:  # noqa: BLE001
         local = momento
     return local.strftime(formato)
+
+
+@app.template_filter("moneda")
+def formato_moneda(valor):
+    """Muestra un monto en la moneda que el usuario eligio en su perfil.
+
+    Antes el simbolo de dolar estaba escrito a mano en cada plantilla, lo
+    que ataba el sistema a un solo pais. Con este filtro el formato vive
+    en un unico lugar (RNF05) y cada usuario ve sus cifras como las
+    escribiria en su pais (RNF01)."""
+    codigo = getattr(current_user, "moneda", None) or localizacion.MONEDA_POR_DEFECTO
+    return localizacion.formatear(valor, codigo)
+
+
+@app.template_filter("simbolo_moneda")
+def simbolo_moneda(_valor=None):
+    """Solo el simbolo, para los textos donde no va una cifra."""
+    codigo = getattr(current_user, "moneda", None) or localizacion.MONEDA_POR_DEFECTO
+    return localizacion.simbolo(codigo)
 
 
 @login_manager.user_loader
@@ -133,6 +156,7 @@ LARGO_MINIMO_CLAVE = 8
 LARGO_MAXIMO_NOMBRE = 100
 LARGO_MAXIMO_DESCRIPCION = 200
 LARGO_MAXIMO_CATEGORIA = 60
+LARGO_MAXIMO_CIUDAD = 80
 
 METODOS_PAGO = ["Efectivo", "Tarjeta de débito", "Tarjeta de crédito",
                 "Transferencia", "Otro"]
@@ -173,6 +197,12 @@ def _validar_fecha(valor):
     if fecha > date.today() + timedelta(days=365):
         return None, "La fecha está demasiado lejos en el futuro."
     return fecha, None
+
+
+def _moneda_del_usuario():
+    """Codigo de moneda del usuario conectado. Las cuentas creadas antes
+    de que existiera el perfil pueden tenerlo vacio, de ahi el respaldo."""
+    return getattr(current_user, "moneda", None) or localizacion.MONEDA_POR_DEFECTO
 
 
 def _categorias_disponibles():
@@ -387,6 +417,128 @@ def eliminar_gasto(gasto_id):
     db.session.delete(gasto)
     db.session.commit()
     return redirect(url_for("gastos"))
+
+
+# =====================================================================
+# Perfil del usuario
+# Datos personales y preferencias de localizacion, cambio de contrasena
+# y baja de la cuenta. Son funciones esperadas en cualquier aplicacion
+# actual: el usuario debe poder corregir sus datos, cambiar su clave sin
+# ayuda de un administrador y darse de baja llevandose sus datos.
+# =====================================================================
+
+@app.route("/perfil", methods=["GET", "POST"])
+@login_required
+def perfil():
+    """Muestra y actualiza los datos del usuario y sus preferencias.
+
+    RNF03: el correo se vuelve a validar y se comprueba que no este en
+    uso por otra cuenta; la moneda, el pais y la zona horaria se
+    verifican contra las listas conocidas antes de guardarse, para que
+    un envio manipulado no inserte valores arbitrarios."""
+    if request.method == "POST":
+        nombre = _texto(request.form.get("nombre"), LARGO_MAXIMO_NOMBRE)
+        correo = _normalizar_correo(request.form.get("correo"))
+
+        if not nombre:
+            flash("Escribe tu nombre.", "error")
+            return redirect(url_for("perfil"))
+        if not PATRON_CORREO.match(correo):
+            flash("El correo no es válido.", "error")
+            return redirect(url_for("perfil"))
+
+        en_uso = Usuario.query.filter(Usuario.correo == correo,
+                                      Usuario.id != current_user.id).first()
+        if en_uso is not None:
+            flash("Ese correo ya pertenece a otra cuenta.", "error")
+            return redirect(url_for("perfil"))
+
+        current_user.nombre = nombre
+        current_user.correo = correo
+        current_user.pais = localizacion.pais_valido(request.form.get("pais"))
+        current_user.ciudad = _texto(request.form.get("ciudad"), LARGO_MAXIMO_CIUDAD)
+        current_user.moneda = localizacion.moneda_valida(request.form.get("moneda"))
+        current_user.zona_horaria = localizacion.zona_valida(request.form.get("zona_horaria"))
+        db.session.commit()
+        flash("Perfil actualizado.", "ok")
+        return redirect(url_for("perfil"))
+
+    # Resumen de actividad de la cuenta, util antes de darse de baja
+    resumen_cuenta = {
+        "gastos": Gasto.query.filter_by(usuario_id=current_user.id).count(),
+        "categorias": Categoria.query.filter_by(usuario_id=current_user.id).count(),
+        "presupuestos": Presupuesto.query.filter_by(usuario_id=current_user.id).count(),
+        "recomendaciones": Recomendacion.query.filter_by(usuario_id=current_user.id).count(),
+    }
+    return render_template("perfil.html",
+                           paises=localizacion.PAISES,
+                           monedas=localizacion.MONEDAS,
+                           zonas=localizacion.ZONAS_HORARIAS,
+                           largo_minimo_clave=LARGO_MINIMO_CLAVE,
+                           resumen=resumen_cuenta)
+
+
+@app.route("/perfil/contrasena", methods=["POST"])
+@login_required
+def cambiar_contrasena():
+    """Cambia la contrasena.
+
+    RNF03: se exige la contrasena actual. Sin ese paso, cualquiera que
+    encontrara una sesion abierta podria apoderarse de la cuenta
+    cambiando la clave, y el dueno quedaria fuera."""
+    actual = request.form.get("actual") or ""
+    nueva = request.form.get("nueva") or ""
+    confirmacion = request.form.get("confirmacion") or ""
+
+    if not check_password_hash(current_user.contrasena_hash, actual):
+        flash("La contraseña actual no es correcta.", "error")
+    elif len(nueva) < LARGO_MINIMO_CLAVE:
+        flash(f"La contraseña nueva debe tener al menos {LARGO_MINIMO_CLAVE} caracteres.",
+              "error")
+    elif nueva != confirmacion:
+        flash("La confirmación no coincide con la contraseña nueva.", "error")
+    elif nueva == actual:
+        flash("La contraseña nueva debe ser distinta de la actual.", "error")
+    else:
+        current_user.contrasena_hash = generate_password_hash(nueva)
+        db.session.commit()
+        flash("Contraseña actualizada.", "ok")
+    return redirect(url_for("perfil"))
+
+
+@app.route("/perfil/eliminar", methods=["POST"])
+@login_required
+def eliminar_cuenta():
+    """Da de baja la cuenta y borra todos sus datos.
+
+    Poder eliminar la propia cuenta es un derecho basico del usuario y un
+    requisito de las normas de privacidad vigentes. Se pide la
+    contrasena porque la accion es irreversible, y se borran primero los
+    datos que dependen del usuario para respetar la integridad
+    referencial de la base."""
+    if not check_password_hash(current_user.contrasena_hash,
+                               request.form.get("contrasena") or ""):
+        flash("La contraseña no es correcta. La cuenta no se eliminó.", "error")
+        return redirect(url_for("perfil"))
+
+    usuario_id = current_user.id
+    for presupuesto_usuario in Presupuesto.query.filter_by(usuario_id=usuario_id).all():
+        for detalle in list(presupuesto_usuario.detalles):
+            db.session.delete(detalle)
+        db.session.delete(presupuesto_usuario)
+    for gasto in Gasto.query.filter_by(usuario_id=usuario_id).all():
+        db.session.delete(gasto)
+    for recomendacion in Recomendacion.query.filter_by(usuario_id=usuario_id).all():
+        db.session.delete(recomendacion)
+    for categoria in Categoria.query.filter_by(usuario_id=usuario_id).all():
+        db.session.delete(categoria)
+    db.session.flush()
+
+    usuario = db.session.get(Usuario, usuario_id)
+    logout_user()
+    db.session.delete(usuario)
+    db.session.commit()
+    return redirect(url_for("registro"))
 
 
 # =====================================================================
@@ -622,7 +774,8 @@ def reporte():
         anterior=reportes.desplazar(periodo, referencia, -1).isoformat(),
         siguiente=reportes.desplazar(periodo, referencia, 1).isoformat(),
         grafica_distribucion=reportes.grafica_distribucion(datos["categorias"]),
-        grafica_evolucion=reportes.grafica_evolucion(datos["evolucion"]),
+        grafica_evolucion=reportes.grafica_evolucion(
+            datos["evolucion"], localizacion.simbolo(_moneda_del_usuario())),
     )
 
 
@@ -669,6 +822,7 @@ def _resumen_para_recomendar(mes, anio):
         presupuesto.gasto_por_categoria(gastos_previos),
         _comparacion_del_mes(mes, anio),
         gastos_mes + gastos_previos,
+        moneda=_moneda_del_usuario(),
     )
 
 

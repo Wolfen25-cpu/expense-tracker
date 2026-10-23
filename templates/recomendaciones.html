@@ -44,11 +44,11 @@
     <div class="resumen">
       <div class="indicador destacado">
         <span class="etiqueta">Gastado este mes</span>
-        <span class="cifra">${{ "%.2f"|format(resumen.total) }}</span>
+        <span class="cifra">{{ resumen.total|moneda }}</span>
       </div>
       <div class="indicador">
         <span class="etiqueta">Mes anterior</span>
-        <span class="cifra">${{ "%.2f"|format(resumen.total_anterior) }}</span>
+        <span class="cifra">{{ resumen.total_anterior|moneda }}</span>
       </div>
       <div class="indicador">
         <span class="etiqueta">Categorías con gasto</span>
@@ -88,7 +88,7 @@
           <p class="texto-recomendacion">{{ r.texto }}</p>
           <div class="pie-recomendacion">
             {% if r.ahorro_estimado %}
-              <span class="ahorro">Ahorro estimado: ${{ "%.2f"|format(r.ahorro_estimado) }}</span>
+              <span class="ahorro">Ahorro estimado: {{ r.ahorro_estimado|moneda }}</span>
             {% else %}
               <span class="ahorro">Sin ahorro estimado</span>
             {% endif %}

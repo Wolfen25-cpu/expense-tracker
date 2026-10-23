@@ -48,7 +48,7 @@
   <div class="resumen">
     <div class="indicador destacado">
       <span class="etiqueta">Total gastado</span>
-      <span class="cifra">${{ "%.2f"|format(r.resumen.total) }}</span>
+      <span class="cifra">{{ r.resumen.total|moneda }}</span>
     </div>
     <div class="indicador">
       <span class="etiqueta">Cantidad de gastos</span>
@@ -56,11 +56,11 @@
     </div>
     <div class="indicador">
       <span class="etiqueta">Promedio por gasto</span>
-      <span class="cifra">${{ "%.2f"|format(r.resumen.promedio) }}</span>
+      <span class="cifra">{{ r.resumen.promedio|moneda }}</span>
     </div>
     <div class="indicador">
       <span class="etiqueta">Gasto mayor</span>
-      <span class="cifra">${{ "%.2f"|format(r.resumen.mayor) }}</span>
+      <span class="cifra">{{ r.resumen.mayor|moneda }}</span>
     </div>
   </div>
 
@@ -85,7 +85,7 @@
           {% for c in r.categorias %}
             <tr>
               <td><span class="etiqueta-categoria">{{ c.categoria }}</span></td>
-              <td class="monto">${{ "%.2f"|format(c.total) }}</td>
+              <td class="monto">{{ c.total|moneda }}</td>
               <td>
                 <div class="barra-pct">
                   <div class="relleno" style="width: {{ c.porcentaje }}%"></div>

@@ -34,6 +34,8 @@ import os
 
 import pandas as pd
 
+import localizacion
+
 # ---------------------------------------------------------------------
 # Umbrales de las reglas de negocio
 # ---------------------------------------------------------------------
@@ -88,7 +90,8 @@ INSTRUCCIONES = (
     "estas reglas sin excepcion:\n"
     "1. Cada recomendacion debe proponer reducir, eliminar o sustituir un "
     "gasto que REALMENTE ocurrio segun el resumen.\n"
-    "2. El ahorro_estimado es el recorte mensual en dolares de ese gasto "
+    "2. El ahorro_estimado es el recorte mensual de ese gasto, expresado "
+    "como numero en la moneda indicada en el campo moneda del resumen, "
     "real, y nunca puede superar lo gastado en esa categoria.\n"
     "3. Esta prohibido presentar como ahorro el presupuesto no utilizado, "
     "el dinero que sobra o el que no se gasto: eso no es un ahorro nuevo.\n"
@@ -150,7 +153,8 @@ def detectar_recurrentes(gastos):
 
 
 def construir_resumen(etiqueta, gastado_mes, gastado_anterior,
-                      comparacion_presupuesto, gastos_para_recurrencia):
+                      comparacion_presupuesto, gastos_para_recurrencia,
+                      moneda=localizacion.MONEDA_POR_DEFECTO):
     """Arma el resumen agregado del mes.
 
     etiqueta                  texto del periodo, por ejemplo "Octubre 2026"
@@ -191,6 +195,7 @@ def construir_resumen(etiqueta, gastado_mes, gastado_anterior,
 
     return {
         "periodo": etiqueta,
+        "moneda": moneda,
         "total": total,
         "total_anterior": total_anterior,
         "cantidad_categorias": len(categorias),
@@ -210,6 +215,12 @@ def recomendar_por_reglas(resumen):
     mayor ahorro primero, hasta el maximo definido."""
     sugerencias = []
 
+    def importe(valor):
+        """Formatea un monto en la moneda del usuario. Antes el simbolo
+        de dolar estaba escrito dentro de cada mensaje."""
+        return localizacion.formatear(valor, resumen.get("moneda",
+                                                         localizacion.MONEDA_POR_DEFECTO))
+
     # Regla 1: categorias que se pasaron del presupuesto.
     # El ahorro estimado es el exceso, que es lo que habria que recortar
     # para volver a lo previsto.
@@ -217,7 +228,7 @@ def recomendar_por_reglas(resumen):
         if linea["exceso"] > 0:
             sugerencias.append({
                 "texto": (f"Te pasaste del presupuesto en {linea['categoria']}: "
-                          f"gastaste ${linea['gastado']:.2f} de ${linea['asignado']:.2f}. "
+                          f"gastaste {importe(linea['gastado'])} de {importe(linea['asignado'])}. "
                           f"Recortar ahi te devuelve al plan del mes."),
                 "ahorro_estimado": linea["exceso"],
             })
@@ -227,7 +238,7 @@ def recomendar_por_reglas(resumen):
         if c["variacion"] is not None and c["variacion"] >= UMBRAL_CRECIMIENTO:
             sugerencias.append({
                 "texto": (f"{c['categoria']} subio {c['variacion']}% respecto al mes "
-                          f"anterior (${c['anterior']:.2f} a ${c['total']:.2f}). "
+                          f"anterior ({importe(c['anterior'])} a {importe(c['total'])}). "
                           f"Volver al nivel anterior seria tu ahorro mas rapido."),
                 "ahorro_estimado": round(c["total"] - c["anterior"], 2),
             })
@@ -254,19 +265,19 @@ def recomendar_por_reglas(resumen):
         tipo = r.get("tipo") or clasificar_recurrente(r["categoria"])
         if tipo == TIPO_CANCELABLE:
             sugerencias.append({
-                "texto": (f"Detecte un gasto recurrente de ${r['monto']:.2f} en "
+                "texto": (f"Detecte un gasto recurrente de {importe(r['monto'])} en "
                           f"{r['categoria']} que se repite en {r['veces']} meses. "
                           f"Si ya no lo usas, cancelarlo ahorra "
-                          f"${r['monto'] * 12:.2f} al ano."),
+                          f"{importe(r['monto'] * 12)} al ano."),
                 "ahorro_estimado": r["monto"],
             })
         else:
             sugerencias.append({
                 "texto": (f"{r['categoria']} tiene un gasto fijo de "
-                          f"${r['monto']:.2f} que se repite en {r['veces']} meses. "
+                          f"{importe(r['monto'])} que se repite en {r['veces']} meses. "
                           f"No se puede eliminar, pero renegociarlo o buscar una "
                           f"alternativa mas barata reduciria tu gasto base; una "
-                          f"rebaja del 10% serian ${r['monto'] * 0.10:.2f} al mes."),
+                          f"rebaja del 10% serian {importe(r['monto'] * 0.10)} al mes."),
                 "ahorro_estimado": round(r["monto"] * 0.10, 2),
             })
 

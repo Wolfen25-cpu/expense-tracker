@@ -27,7 +27,7 @@
       <a href="{{ url_for('presupuesto_mensual') }}">Presupuesto</a>
       <a href="{{ url_for('reporte') }}">Reportes</a>
       <a href="{{ url_for('ver_recomendaciones') }}">Recomendaciones</a>
-      <span class="usuario">{{ current_user.nombre }}</span>
+      <a class="usuario" href="{{ url_for('perfil') }}">{{ current_user.nombre }}</a>
       <!-- Cerrar sesion va por POST con token para que ninguna otra
            pagina pueda cerrar la sesion del usuario a sus espaldas -->
       <form method="POST" action="{{ url_for('logout') }}" class="salir-form">
@@ -38,8 +38,19 @@
   </header>
   {% endif %}
 
-  <!-- Hueco que cada pagina rellena con su propio contenido -->
+  <!-- Mensajes de una sola vez (confirmaciones y errores). Flask los
+       guarda en la sesion y se muestran en la siguiente pagina, que es
+       lo que permite confirmar una accion despues de una redireccion. -->
   <main class="contenedor">
+    {% with mensajes = get_flashed_messages(with_categories=true) %}
+      {% if mensajes %}
+      <div class="avisos">
+        {% for categoria, texto in mensajes %}
+          <div class="aviso {{ 'ok' if categoria == 'ok' else 'excedido' }}">{{ texto }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
     {% block contenido %}{% endblock %}
   </main>
 

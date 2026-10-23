@@ -77,7 +77,7 @@
        reportes por periodo y la comparacion con el presupuesto (RF06). -->
   <div class="total">
     <span class="etiqueta">Total registrado ({{ gastos|length }} gastos)</span>
-    <span class="cifra">${{ "%.2f"|format(total) }}</span>
+    <span class="cifra">{{ total|moneda }}</span>
   </div>
 
   <!-- Listado de gastos del usuario, del mas reciente al mas antiguo -->
@@ -95,7 +95,7 @@
         {% for g in gastos %}
           <tr>
             <td>{{ g.fecha.strftime("%d/%m/%Y") }}</td>
-            <td class="monto">${{ "%.2f"|format(g.monto) }}</td>
+            <td class="monto">{{ g.monto|moneda }}</td>
             <td><span class="etiqueta-categoria">{{ g.categoria.nombre }}</span></td>
             <td>{{ g.descripcion or "—" }}</td>
             <td>{{ g.metodo_pago or "—" }}</td>

@@ -34,6 +34,15 @@ class Usuario(db.Model, UserMixin):
     contrasena_hash = db.Column(db.String(255), nullable=False)
     fecha_registro = db.Column(db.DateTime, default=ahora_utc)
 
+    # Preferencias de localizacion del usuario (RNF01). Determinan la
+    # moneda en que ve sus montos y la hora en que lee sus fechas, de
+    # modo que el sistema sirva fuera de un solo pais. Los valores se
+    # validan contra las listas de localizacion.py antes de guardarse.
+    pais = db.Column(db.String(60), default="")
+    ciudad = db.Column(db.String(80), default="")
+    moneda = db.Column(db.String(3), default="USD")
+    zona_horaria = db.Column(db.String(60), default="America/Puerto_Rico")
+
     gastos = db.relationship("Gasto", backref="usuario")
     categorias = db.relationship("Categoria", backref="usuario")
 

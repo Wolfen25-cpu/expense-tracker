@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+<!--
+  PANTALLA DE PERFIL.
+  Datos personales y preferencias de localizacion (pais, ciudad, moneda
+  y zona horaria), cambio de contrasena y baja de la cuenta.
+  La moneda elegida aqui se aplica a todos los montos del sistema y la
+  zona horaria a todas las fechas.
+-->
+
+{% block titulo %}Mi perfil{% endblock %}
+
+{% block contenido %}
+
+  <h1>Mi perfil</h1>
+
+  <!-- Datos y preferencias -->
+  <h2>Datos personales</h2>
+  <div class="tarjeta">
+    <form method="POST" action="{{ url_for('perfil') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="campos">
+        <div class="campo">
+          <label for="nombre">Nombre</label>
+          <input id="nombre" name="nombre" maxlength="100"
+                 value="{{ current_user.nombre }}" required>
+        </div>
+        <div class="campo">
+          <label for="correo">Correo</label>
+          <input id="correo" name="correo" type="email" maxlength="120"
+                 value="{{ current_user.correo }}" required>
+        </div>
+        <div class="campo">
+          <label for="pais">País</label>
+          <select id="pais" name="pais">
+            <option value="">Sin especificar</option>
+            {% for nombre in paises %}
+              <option value="{{ nombre }}"
+                {% if nombre == current_user.pais %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="campo">
+          <label for="ciudad">Ciudad</label>
+          <input id="ciudad" name="ciudad" maxlength="80"
+                 value="{{ current_user.ciudad or '' }}" placeholder="Opcional">
+        </div>
+        <div class="campo">
+          <label for="moneda">Moneda</label>
+          <select id="moneda" name="moneda">
+            {% for codigo, datos in monedas.items() %}
+              <option value="{{ codigo }}"
+                {% if codigo == current_user.moneda %}selected{% endif %}>
+                {{ datos.simbolo }} {{ codigo }} &middot; {{ datos.nombre }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="campo">
+          <label for="zona_horaria">Zona horaria</label>
+          <select id="zona_horaria" name="zona_horaria">
+            {% for zona in zonas %}
+              <option value="{{ zona }}"
+                {% if zona == current_user.zona_horaria %}selected{% endif %}>{{ zona }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <p class="ayuda">
+        La moneda se aplica a todos los montos del sistema y la zona horaria
+        a todas las fechas que se muestran.
+      </p>
+      <div class="acciones">
+        <button type="submit">Guardar cambios</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Cambio de contrasena. Se pide la actual para que nadie pueda
+       apoderarse de una cuenta que encuentre con la sesion abierta. -->
+  <h2>Cambiar contraseña</h2>
+  <div class="tarjeta">
+    <form method="POST" action="{{ url_for('cambiar_contrasena') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="campos">
+        <div class="campo">
+          <label for="actual">Contraseña actual</label>
+          <input id="actual" name="actual" type="password" required>
+        </div>
+        <div class="campo">
+          <label for="nueva">Contraseña nueva</label>
+          <input id="nueva" name="nueva" type="password"
+                 minlength="{{ largo_minimo_clave }}" required>
+        </div>
+        <div class="campo">
+          <label for="confirmacion">Repetir la nueva</label>
+          <input id="confirmacion" name="confirmacion" type="password"
+                 minlength="{{ largo_minimo_clave }}" required>
+        </div>
+      </div>
+      <p class="ayuda">Mínimo {{ largo_minimo_clave }} caracteres.</p>
+      <div class="acciones">
+        <button type="submit">Cambiar contraseña</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Baja de la cuenta -->
+  <h2>Eliminar mi cuenta</h2>
+  <div class="tarjeta zona-peligro">
+    <p>
+      Se eliminarán de forma permanente
+      {{ resumen.gastos }} gasto(s),
+      {{ resumen.presupuestos }} presupuesto(s),
+      {{ resumen.categorias }} categoría(s) propia(s) y
+      {{ resumen.recomendaciones }} recomendación(es).
+      Esta acción no se puede deshacer.
+    </p>
+    <p class="ayuda">
+      Si quieres conservar tus datos, exporta tus gastos en CSV desde la
+      pantalla de reportes antes de continuar.
+    </p>
+    <form method="POST" action="{{ url_for('eliminar_cuenta') }}"
+          onsubmit="return confirm('Esta acción es permanente. ¿Eliminar tu cuenta y todos tus datos?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="campo campo-total">
+        <label for="contrasena">Confirma con tu contraseña</label>
+        <input id="contrasena" name="contrasena" type="password" required>
+      </div>
+      <div class="acciones">
+        <button type="submit" class="boton-peligro-solido">Eliminar mi cuenta</button>
+      </div>
+    </form>
+  </div>
+
+{% endblock %}

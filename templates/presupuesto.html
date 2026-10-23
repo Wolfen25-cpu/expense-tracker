@@ -38,9 +38,9 @@
   <div class="tarjeta">
     <div class="total">
       <span class="etiqueta">
-        Gastado de ${{ "%.2f"|format(c.total.asignado) }} presupuestados
+        Gastado de {{ c.total.asignado|moneda }} presupuestados
       </span>
-      <span class="cifra">${{ "%.2f"|format(c.total.gastado) }}</span>
+      <span class="cifra">{{ c.total.gastado|moneda }}</span>
     </div>
     <div class="barra-pct grande">
       <div class="relleno {{ c.total.estado }}" style="width: {{ c.total.ancho }}%"></div>
@@ -48,9 +48,9 @@
     <p class="pct">
       {{ c.total.porcentaje }}% consumido &middot;
       {% if c.total.restante >= 0 %}
-        quedan ${{ "%.2f"|format(c.total.restante) }}
+        quedan {{ c.total.restante|moneda }}
       {% else %}
-        excedido por ${{ "%.2f"|format(c.total.restante|abs) }}
+        excedido por {{ c.total.restante|abs|moneda }}
       {% endif %}
     </p>
   </div>
@@ -71,11 +71,11 @@
           <tr>
             <td><span class="etiqueta-categoria">{{ l.categoria }}</span></td>
             <td class="monto">
-              {% if l.asignado %}${{ "%.2f"|format(l.asignado) }}{% else %}—{% endif %}
+              {% if l.asignado %}{{ l.asignado|moneda }}{% else %}—{% endif %}
             </td>
-            <td class="monto">${{ "%.2f"|format(l.gastado) }}</td>
+            <td class="monto">{{ l.gastado|moneda }}</td>
             <td class="monto {% if l.asignado and l.restante < 0 %}negativo{% endif %}">
-              {% if l.asignado %}${{ "%.2f"|format(l.restante) }}{% else %}—{% endif %}
+              {% if l.asignado %}{{ l.restante|moneda }}{% else %}—{% endif %}
             </td>
             <td>
               {% if l.asignado %}
@@ -139,12 +139,12 @@
       {% if c.sobreasignado %}
       <!-- Aviso de coherencia: la suma por categorias pasa del total -->
       <p class="error">
-        La suma asignada por categorías (${{ "%.2f"|format(c.asignado_categorias) }})
+        La suma asignada por categorías ({{ c.asignado_categorias|moneda }})
         supera el presupuesto total del mes.
       </p>
       {% elif c.definido %}
       <p class="ayuda">
-        Sin asignar: ${{ "%.2f"|format(c.sin_asignar) }}
+        Sin asignar: {{ c.sin_asignar|moneda }}
       </p>
       {% endif %}
 

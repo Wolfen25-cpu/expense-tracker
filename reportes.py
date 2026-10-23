@@ -249,7 +249,7 @@ def grafica_distribucion(categorias):
     return _a_base64(figura)
 
 
-def grafica_evolucion(serie):
+def grafica_evolucion(serie, simbolo="$"):
     """Grafica de linea con el gasto total a lo largo del periodo.
     Devuelve None si todos los valores son cero."""
     if not any(serie["valores"]):
@@ -264,7 +264,7 @@ def grafica_evolucion(serie):
     eje.set_xticks(posiciones[::salto])
     eje.set_xticklabels(serie["etiquetas"][::salto], fontsize=8)
     eje.set_ylim(bottom=0)
-    eje.set_ylabel("Gasto ($)", fontsize=9)
+    eje.set_ylabel(f"Gasto ({simbolo})", fontsize=9)
     eje.grid(axis="y", color="#dde3e8", linewidth=0.8)
     for lado in ("top", "right"):
         eje.spines[lado].set_visible(False)

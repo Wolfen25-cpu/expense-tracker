@@ -376,3 +376,13 @@ button.salir {
   cursor: pointer;
 }
 button.salir:hover { text-decoration: underline; }
+
+/* --- Perfil: zona de acciones irreversibles --- */
+.zona-peligro { border-color: #f3c4c0; }
+.zona-peligro h2 { margin-top: 0; }
+.boton-peligro-solido {
+  background: var(--peligro);
+  color: #fff;
+}
+a.usuario { color: #fff; text-decoration: none; opacity: .85; }
+a.usuario:hover { opacity: 1; text-decoration: underline; }
